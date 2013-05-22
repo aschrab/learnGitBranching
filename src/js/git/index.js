@@ -68,6 +68,14 @@ GitEngine.prototype.init = function() {
   this.commit();
 };
 
+GitEngine.prototype.hasOrigin = function() {
+  return false;
+};
+
+GitEngine.prototype.isOrigin = function() {
+  return false;
+};
+
 GitEngine.prototype.exportTree = function() {
   // need to export all commits, their connectivity / messages, branches, and state of head.
   // this would be simple if didn't have circular structures.... :P
@@ -1625,6 +1633,14 @@ var Ref = Backbone.Model.extend({
     }
   },
 
+  getIsRemote: function() {
+    return false;
+  },
+
+  getName: function() {
+    return this.get('id');
+  },
+
   targetChanged: function(model, targetValue, ev) {
     // push our little 3 stack back. we need to do this because
     // backbone doesn't give you what the value WAS, only what it was changed
@@ -1640,7 +1656,12 @@ var Ref = Backbone.Model.extend({
 
 var Branch = Ref.extend({
   defaults: {
-    visBranch: null
+    visBranch: null,
+    origin: null
+  },
+
+  getIsRemote: function() {
+    return this.get('origin') !== null;
   },
 
   initialize: function() {

@@ -11,6 +11,7 @@ var Errors = require('../util/errors');
 var Warning = Errors.Warning;
 
 var util = require('../util');
+var log = require('../log');
 var keyboard = require('../util/keyboard');
 
 var CommandPromptView = Backbone.View.extend({
@@ -74,7 +75,7 @@ var CommandPromptView = Backbone.View.extend({
   },
 
   onKeyDown: function(e) {
-    var el = e.srcElement || e.currentTarget;
+    var el = e.target;
     this.updatePrompt(el);
   },
 
@@ -232,6 +233,7 @@ var CommandPromptView = Backbone.View.extend({
     if (this.commands.length > 100) {
       this.clearLocalStorage();
     }
+    log.commandEntered(value);
   },
 
   submitCommand: function(value) {

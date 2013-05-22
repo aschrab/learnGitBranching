@@ -14,11 +14,11 @@ exports.dialog = {
         '',
         'If you have not seen the demo, please check it out here:',
         '',
-        '[http://pcottle.github.com/learnGitBranching/?demo](http://pcottle.github.com/learnGitBranching/?demo)',
+        '[http://pcottle.github.io/learnGitBranching/?demo](http://pcottle.github.io/learnGitBranching/?demo)',
         '',
         'Annoyed at this dialog? Append `?NODEMO` to the url to get rid of it, linked below for convenience:',
         '',
-        '[http://pcottle.github.com/learnGitBranching/?NODEMO](?NODEMO)'
+        '[http://pcottle.github.io/learnGitBranching/?NODEMO](?NODEMO)'
       ]
     }
   }, {
@@ -55,6 +55,60 @@ exports.dialog = {
       ]
     }
   }],
+  'ja': [{
+    type: 'ModalAlert',
+    options: {
+      markdowns: [
+        '## LearnGitBranchingへようこそ',
+        '',
+        'gitのパワフルなブランチ機能のコンセプトが ',
+        '学びやすくなるようにこのアプリケーションを作りました。 ',
+        'このアプリケーションを楽しんで使って頂いて、 ',
+        '何かを学習して頂けたなら嬉しいです。',
+        '',
+        '# とりあえず触ってみたい方へ：',
+        '',
+        '簡単なデモを用意してあるので、もしよければこちらもご覧ください：',
+        '',
+        '[http://remore.github.io/learnGitBranching-ja/?demo](http://remore.github.io/learnGitBranching-ja/?demo)',
+        '',
+        'このダイアログ自体を省略するには、以下のようにURLの末尾にクエリストリング`?NODEMO`を付加してアクセスしてください。',
+        '',
+        '[http://remore.github.io/learnGitBranching-ja/?NODEMO](http://remore.github.io/learnGitBranching-ja/?NODEMO)'
+      ]
+    }
+  }, {
+    type: 'ModalAlert',
+    options: {
+      markdowns: [
+        '## ここで学べるGitのオペレーション',
+        '',
+        'ここでは、下記の種類のgitコマンドを学ぶことができます。',
+        '',
+        ' * commit',
+        ' * branch',
+        ' * checkout',
+        ' * cherry-pick',
+        ' * reset',
+        ' * revert',
+        ' * rebase',
+        ' * merge'
+      ]
+    }
+  }, {
+    type: 'ModalAlert',
+    options: {
+      markdowns: [
+        '## 学習した内容を共有できます',
+        '',
+        '画面左のコマンドプロンプトから`export tree`や`import tree`とタイプすることで、gitのツリー構造を友達に送ることができます',
+        '',
+        '何か教材になるようなケースはご存知ないでしょうか。`build level`で課題を作成したり、`import level`で他の人の課題に挑戦してみてください。',
+        '',
+        'それでは教材の選択画面に進んでみることにします。'
+      ]
+    }
+  }],
   'zh_CN': [{
     type: 'ModalAlert',
     options: {
@@ -68,11 +122,11 @@ exports.dialog = {
         '',
         '如果你还没看过演示，请到此查看：',
         '',
-        '[http://pcottle.github.com/learnGitBranching/?demo](http://pcottle.github.com/learnGitBranching/?demo)',
+        '[http://pcottle.github.io/learnGitBranching/?demo](http://pcottle.github.io/learnGitBranching/?demo)',
         '',
         '厌烦这个对话框？ 在 URL 后头加上 `?NODEMO` 就看不到它了，也可以直接点下边这个链接：',
         '',
-        '[http://pcottle.github.com/learnGitBranching/?NODEMO](http://pcottle.github.com/learnGitBranching/?NODEMO)'
+        '[http://pcottle.github.io/learnGitBranching/?NODEMO](http://pcottle.github.io/learnGitBranching/?NODEMO)'
       ]
     }
   }, {
@@ -127,10 +181,10 @@ exports.dialog = {
         // 'Unfortunately this was submitted before I finished all the help ',
         // 'and tutorial sections, so forgive the scarcity. See the demo here:',
         '',
-        '이 애플리케이션은 [Peter Cottle](https://github.com/pcottle)님의 [LearnGitBranching](http://pcottle.github.com/learnGitBranching/)를 번역한 것입니다.',
+        '이 애플리케이션은 [Peter Cottle](https://github.io/pcottle)님의 [LearnGitBranching](http://pcottle.github.io/learnGitBranching/)를 번역한 것입니다.',
         '아래 데모를 먼저 보셔도 좋습니다.',
         '',
-        '<http://pcottle.github.com/learnGitBranching/?demo&locale=ko>'
+        '<http://pcottle.github.io/learnGitBranching/?demo&locale=ko>'
       ]
     }
   }, {

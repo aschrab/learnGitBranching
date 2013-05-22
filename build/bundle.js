@@ -3566,6 +3566,7 @@ var Sandbox = Backbone.View.extend({
           deferred: whenLevelOpen,
           command: command
         });
+        this.hide();
 
         whenLevelOpen.promise.then(function() {
           command.finishWith(deferred);
@@ -5334,7 +5335,7 @@ var getStartDialog = exports.getStartDialog = function(level) {
     }
   };
   var startCopy = _.clone(
-    level.startDialog[util.getDefaultLocale()] || level.startDialog
+    level.startDialog[getDefaultLocale()] || level.startDialog
   );
   startCopy.childViews.unshift(errorAlert);
 
@@ -5349,6 +5350,7 @@ require.define("/src/js/intl/strings.js",function(require,module,exports,__dirna
   ///////////////////////////////////////////////////////////////////////////
   'finish-dialog-finished': {
     '__desc__': 'One of the lines in the next level dialog',
+    'ja': '最後のレベルをクリアしました！すごい！！',
     'en_US': 'Wow! You finished the last level, great!',
     'zh_CN': '我的个天！你完成了最后一关，碉堡了！'
   },
@@ -5356,18 +5358,21 @@ require.define("/src/js/intl/strings.js",function(require,module,exports,__dirna
   'finish-dialog-next': {
     '__desc__': 'One of the lines in the next level dialog',
     'en_US': 'Would you like to move on to *"{nextLevel}"*, the next level?',
+    'ja': '次の章 *"{nextLevel}"* へ進みますか？',
     'zh_CN': '要不前进到下一关 *“{nextLevel}”*？'
   },
   ///////////////////////////////////////////////////////////////////////////
   'finish-dialog-win': {
     '__desc__': 'One of the lines in the next level dialog',
     'en_US': 'Awesome! You matched or exceeded our solution.',
+    'ja': '素晴らしい！このレベルをクリアしましたね。',
     'zh_CN': '牛鼻啊！你达到或者完爆了我们的答案。'
   },
   ///////////////////////////////////////////////////////////////////////////
   'finish-dialog-lose': {
     '__desc__': 'When the user entered more commands than our best, encourage them to do better',
     'en_US': 'See if you can whittle it down to {best} :D',
+    'ja': '模範解答の回数={best}回でクリアする方法も考えてみましょう :D',
     'zh_CN': '试试看你能否在 {best} 之内搞定 :D'
   },
   ///////////////////////////////////////////////////////////////////////////
@@ -5521,6 +5526,7 @@ require.define("/src/js/intl/strings.js",function(require,module,exports,__dirna
   'learn-git-branching': {
     '__desc__': 'The title of the app, with spaces',
     'en_US': 'Learn Git Branching',
+    'ja': '日本語版リポジトリ',
     'ko': 'Git 브랜치 배우기',
     'zh_CN': '学习Git分支'
   },
@@ -5944,7 +5950,7 @@ function CommandUI() {
   var Collections = require('../models/collections');
   var CommandViews = require('../views/commandViews');
 
-  //new Views.HelperBar();
+  var mainHelprBar = new Views.MainHelperBar();
 
   this.commandCollection = new Collections.CommandCollection();
   this.commandBuffer = new Collections.CommandBuffer({
@@ -5997,6 +6003,7 @@ var Q = require('q');
 var util = require('../util');
 var Main = require('../app');
 var intl = require('../intl');
+var log = require('../log');
 
 var Errors = require('../util/errors');
 var Sandbox = require('../level/sandbox').Sandbox;
@@ -6110,6 +6117,10 @@ var Level = Sandbox.extend({
     });
   },
 
+  getEnglishName: function() {
+    return this.level.name.en_US;
+  },
+
   initName: function() {
     var name = intl.getName(this.level);
 
@@ -6176,6 +6187,7 @@ var Level = Sandbox.extend({
         'commandSubmitted',
         toIssue
       );
+      log.showLevelSolution(this.getEnglishName());
     }, this);
 
     var commandStr = command.get('rawStr');
@@ -6375,6 +6387,7 @@ var Level = Sandbox.extend({
     this.solved = true;
     if (!this.isShowingSolution) {
       Main.getEvents().trigger('levelSolved', this.level.id);
+      log.levelSolved(this.getEnglishName());
     }
 
     this.hideGoal();
@@ -6526,6 +6539,36 @@ var Level = Sandbox.extend({
 
 exports.Level = Level;
 exports.regexMap = regexMap;
+
+});
+
+require.define("/src/js/log/index.js",function(require,module,exports,__dirname,__filename,process,global){
+var log = function(category, action, label) {
+  window._gaq = window._gaq || [];
+  window._gaq.push(['_trackEvent', category, action, label]);
+  //console.log('just logged ', [category, action, label].join('|'));
+};
+
+exports.viewInteracted = function(viewName) {
+  log('views', 'interacted', viewName);
+};
+
+exports.showLevelSolution = function(levelName) {
+  log('levels', 'showedLevelSolution', levelName);
+};
+
+exports.levelSelected = function(levelName) {
+  log('levels', 'levelSelected', levelName);
+};
+
+exports.levelSolved = function(levelName) {
+  log('levels', 'levelSolved', levelName);
+};
+
+exports.commandEntered = function(value) {
+  log('commands', 'commandEntered', value);
+};
+
 
 });
 
@@ -6985,6 +7028,14 @@ GitEngine.prototype.init = function() {
 
   // commit once to get things going
   this.commit();
+};
+
+GitEngine.prototype.hasOrigin = function() {
+  return false;
+};
+
+GitEngine.prototype.isOrigin = function() {
+  return false;
 };
 
 GitEngine.prototype.exportTree = function() {
@@ -8544,6 +8595,14 @@ var Ref = Backbone.Model.extend({
     }
   },
 
+  getIsRemote: function() {
+    return false;
+  },
+
+  getName: function() {
+    return this.get('id');
+  },
+
   targetChanged: function(model, targetValue, ev) {
     // push our little 3 stack back. we need to do this because
     // backbone doesn't give you what the value WAS, only what it was changed
@@ -8559,7 +8618,12 @@ var Ref = Backbone.Model.extend({
 
 var Branch = Ref.extend({
   defaults: {
-    visBranch: null
+    visBranch: null,
+    origin: null
+  },
+
+  getIsRemote: function() {
+    return this.get('origin') !== null;
   },
 
   initialize: function() {
@@ -9511,6 +9575,7 @@ var Backbone = (!require('../util').isBrowser()) ? require('backbone') : window.
 
 var Main = require('../app');
 var intl = require('../intl');
+var log = require('../log');
 var Constants = require('../util/constants');
 var KeyboardListener = require('../util/keyboard').KeyboardListener;
 var GitError = require('../util/errors').GitError;
@@ -10078,29 +10143,192 @@ var LevelToolbar = BaseView.extend({
 
 var HelperBar = BaseView.extend({
   tagName: 'div',
-  className: 'helperBar',
+  className: 'helperBar transitionAll',
   template: _.template($('#helper-bar-template').html()),
   events: {
-    'click div': 'onClick'
+    'click a': 'onClick'
   },
 
   onClick: function(ev) {
+    var target = ev.target;
+    var id = $(target).attr('data-id');
+    var funcName = 'on' + id[0].toUpperCase() + id.slice(1) + 'Click';
+    this[funcName].call(this);
+  },
+
+  show: function() {
+    this.$el.toggleClass('show', true);
+  },
+
+  hide: function() {
+    this.$el.toggleClass('show', false);
+    if (this.deferred) {
+      this.deferred.resolve();
+    }
+  },
+
+  getItems: function() {
+    return [];
+  },
+
+  setupChildren: function() {
+  },
+
+  fireCommand: function(command) {
+    Main.getEventBaton().trigger('commandSubmitted', command);
+  },
+
+  showDeferMe: function(otherBar) {
+    this.hide();
+
+    var whenClosed = Q.defer();
+    otherBar.deferred = whenClosed;
+    whenClosed.promise.then(_.bind(function() {
+      this.show();
+    }, this));
+    otherBar.show();
+  },
+
+  onExitClick: function() {
+    this.hide();
   },
 
   initialize: function(options) {
     options = options || {};
     this.destination = $('body');
 
-    var items = [{
-      text: '??',
-      id: 'main'
-    }];
-
     this.JSON = {
-      items: items
+      items: this.getItems()
     };
-
     this.render();
+    this.setupChildren();
+
+    if (!options.wait) {
+      this.show();
+    }
+  }
+});
+
+var IntlHelperBar = HelperBar.extend({
+  getItems: function() {
+    return [{
+      text: 'Git Branching',
+      id: 'english'
+    }, {
+      text: '日本語版リポジトリ',
+      id: 'japanese'
+    }, {
+      text: 'Git 브랜치 배우기',
+      id: 'korean'
+    }, {
+      text: '学习Git分支',
+      id: 'chinese'
+    }, {
+      text: 'Français(e)',
+      id: 'french'
+    }, {
+      icon: 'signout',
+      id: 'exit'
+    }];
+  },
+
+  fireCommand: function() {
+    log.viewInteracted('intlSelect');
+    HelperBar.prototype.fireCommand.apply(this, arguments);
+  },
+
+  onJapaneseClick: function() {
+    this.fireCommand('locale ja; levels');
+    this.hide();
+  },
+
+  onEnglishClick: function() {
+    this.fireCommand('locale en_US; levels');
+    this.hide();
+  },
+
+  onKoreanClick: function() {
+    this.fireCommand('locale ko; levels');
+    this.hide();
+  },
+
+  onFrenchClick: function() {
+    this.fireCommand('locale fr_FR; levels');
+    this.hide();
+  },
+
+  onChineseClick: function() {
+    this.fireCommand('locale zh_CN; levels');
+    this.hide();
+  }
+});
+
+var CommandsHelperBar = HelperBar.extend({
+  getItems: function() {
+    return [{
+      text: 'Levels',
+      id: 'levels'
+    }, {
+      text: 'Reset',
+      id: 'reset'
+    }, {
+      text: 'Undo',
+      id: 'undo'
+    }, {
+      text: 'Help',
+      id: 'help'
+    }, {
+      icon: 'signout',
+      id: 'exit'
+    }];
+  },
+
+  fireCommand: function() {
+    log.viewInteracted('helperBar');
+    HelperBar.prototype.fireCommand.apply(this, arguments);
+  },
+
+  onLevelsClick: function() {
+    this.fireCommand('levels');
+  },
+
+  onResetClick: function() {
+    this.fireCommand('reset');
+  },
+
+  onUndoClick: function() {
+    this.fireCommand('undo');
+  },
+
+  onHelpClick: function() {
+    this.fireCommand('help general; git help');
+  }
+});
+
+var MainHelperBar = HelperBar.extend({
+  getItems: function() {
+    return [{
+      icon: 'question-sign',
+      id: 'commands'
+    }, {
+      icon: 'globe',
+      id: 'intl'
+    }];
+  },
+
+  onIntlClick: function() {
+    this.showDeferMe(this.intlHelper);
+    log.viewInteracted('openIntlBar');
+  },
+
+  onCommandsClick: function() {
+    this.showDeferMe(this.commandsHelper);
+    log.viewInteracted('openCommandsBar');
+  },
+
+  setupChildren: function() {
+    this.commandsHelper = new CommandsHelperBar({ wait: true });
+    this.intlHelper = new IntlHelperBar({ wait: true});
   }
 });
 
@@ -10171,7 +10399,8 @@ exports.LeftRightView = LeftRightView;
 exports.ZoomAlertWindow = ZoomAlertWindow;
 exports.ConfirmCancelTerminal = ConfirmCancelTerminal;
 exports.WindowSizeAlertWindow = WindowSizeAlertWindow;
-exports.HelperBar = HelperBar;
+
+exports.MainHelperBar = MainHelperBar;
 
 exports.CanvasTerminalHolder = CanvasTerminalHolder;
 exports.LevelToolbar = LevelToolbar;
@@ -12421,6 +12650,17 @@ require.define("/src/js/dialogs/nextLevel.js",function(require,module,exports,__
       ]
     }
   }],
+  'ja': [{
+    type: 'ModalAlert',
+    options: {
+      markdowns: [
+        '## 完成!',
+        '',
+        'あなたは*{numCommands}*回のコマンドでこの課題をクリアしました; ',
+        '模範解答では{best}回です。'
+      ]
+    }
+  }],
   'zh_CN': [{
     type: 'ModalAlert',
     options: {
@@ -13975,7 +14215,7 @@ var GitDemonstrationView = ContainedBase.extend({
 
   initVis: function() {
     this.mainVis = new Visualization({
-      el: this.$('div.visHolder')[0],
+      el: this.$('div.visHolder div.visHolderInside')[0],
       noKeyboardInput: true,
       noClick: true,
       smallCanvas: true,
@@ -14323,7 +14563,7 @@ var MultiViewBuilder = ContainedBase.extend({
   },
 
   addView: function(ev) {
-    var el = ev.srcElement;
+    var el = ev.target;
     var type = $(el).attr('data-type');
 
     var whenDone = Q.defer();
@@ -14346,7 +14586,7 @@ var MultiViewBuilder = ContainedBase.extend({
   },
 
   testOneView: function(ev) {
-    var el = ev.srcElement;
+    var el = ev.target;
     var index = $(el).attr('data-index');
     var toTest = this.getChildViews()[index];
     var MultiView = require('../views/multiView').MultiView;
@@ -14363,7 +14603,7 @@ var MultiViewBuilder = ContainedBase.extend({
   },
 
   editOneView: function(ev) {
-    var el = ev.srcElement;
+    var el = ev.target;
     var index = $(el).attr('data-index');
     var type = $(el).attr('data-type');
 
@@ -14387,7 +14627,7 @@ var MultiViewBuilder = ContainedBase.extend({
   },
 
   deleteOneView: function(ev) {
-    var el = ev.srcElement;
+    var el = ev.target;
     var index = $(el).attr('data-index');
     var toSlice = this.getChildViews();
 
@@ -14627,11 +14867,6 @@ function GitVisuals(options) {
   this.branchCollection.on('remove', this.removeBranch, this);
   this.deferred = [];
 
-  // eventually have origin support here
-  this.posBoundaries = {
-    min: 0,
-    max: 1
-  };
   this.flipFraction = 0.65;
 
   var Main = require('../app');
@@ -14705,9 +14940,28 @@ GitVisuals.prototype.getScreenPadding = function() {
   };
 };
 
+GitVisuals.prototype.getPosBoundaries = function() {
+  if (this.gitEngine.hasOrigin()) {
+    return {
+      min: 0,
+      max: 0.5
+    };
+  } else if (this.gitEngine.isOrigin()) {
+    return {
+      min: 0.5,
+      max: 1
+    };
+  }
+  return {
+    min: 0,
+    max: 1
+  };
+};
+
 GitVisuals.prototype.getFlipPos = function() {
-  var min = this.posBoundaries.min;
-  var max = this.posBoundaries.max;
+  var bounds = this.getPosBoundaries();
+  var min = bounds.min;
+  var max = bounds.max;
   return this.flipFraction * (max - min) + min;
 };
 
@@ -15061,10 +15315,11 @@ GitVisuals.prototype.calcBranchStacks = function() {
 GitVisuals.prototype.calcWidth = function() {
   this.maxWidthRecursive(this.rootCommit);
 
+  var bounds = this.getPosBoundaries();
   this.assignBoundsRecursive(
     this.rootCommit,
-    this.posBoundaries.min,
-    this.posBoundaries.max
+    bounds.min,
+    bounds.max
   );
 };
 
@@ -15274,7 +15529,7 @@ GitVisuals.prototype.genResizeFunc = function() {
     _.bind(function(width, height) {
 
       // refresh when we are ready if we are animating som ething
-      if (GLOBAL.isAnimating) {
+      if (false && GLOBAL.isAnimating) {
         var Main = require('../app');
         Main.getEventBaton().trigger('commandSubmitted', 'refresh');
       } else {
@@ -15989,17 +16244,31 @@ var VisBranch = VisBase.extend({
     var commit = this.gitEngine.getCommitFromRef(this.get('branch'));
     var visNode = commit.get('visNode');
 
-    var threshold = this.get('gitVisuals').getFlipPos();
-    // somewhat tricky flip management here
-    var flip;
-    if (visNode.get('pos').x > threshold) {
-      flip = (this.get('isHead')) ? 1 : -1;
-      this.set('flip', flip);
-    } else {
-      flip = (this.get('isHead')) ? -1 : 1;
-      this.set('flip', flip);
-    }
+    this.set('flip', this.getFlipBool(commit, visNode));
     return visNode.getScreenCoords();
+  },
+
+  getFlipBool: function(commit, visNode) {
+    var threshold = this.get('gitVisuals').getFlipPos();
+    var overThreshold = (visNode.get('pos').x > threshold);
+
+    // easy logic first
+    if (!this.get('isHead')) {
+      if (this.getIsRemote()) {
+        return (overThreshold) ? 1 : -1;
+      } else {
+        return (overThreshold) ? -1 : 1;
+      }
+    }
+
+    // now for HEAD....
+    if (overThreshold) {
+      // if by ourselves, then feel free to squeeze in. but
+      // if other branches are here, then we need to show separate
+      return (this.isBranchStackEmpty()) ? -1 : 1;
+    } else {
+      return (this.isBranchStackEmpty()) ? 1 : -1;
+    }
   },
 
   getBranchStackIndex: function() {
@@ -16027,8 +16296,25 @@ var VisBranch = VisBase.extend({
     return this.getBranchStackArray().length;
   },
 
+  isBranchStackEmpty: function() {
+    // useful function for head when computing flip logic
+    var arr = this.gitVisuals.branchStackMap[this.getCommitID()];
+    return (arr) ?
+      arr.length === 0 :
+      true;
+  },
+
+  getCommitID: function() {
+    var target = this.get('branch').get('target');
+    if (target.get('type') === 'branch') {
+      // for HEAD
+      target = target.get('target');
+    }
+    return target.get('id');
+  },
+
   getBranchStackArray: function() {
-    var arr = this.gitVisuals.branchStackMap[this.get('branch').get('target').get('id')];
+    var arr = this.gitVisuals.branchStackMap[this.getCommitID()];
     if (arr === undefined) {
       // this only occurs when we are generating graphics inside of
       // a new Branch instantiation, so we need to force the update
@@ -16170,12 +16456,16 @@ var VisBranch = VisBase.extend({
     };
   },
 
-  getName: function() {
-    var name = this.get('branch').get('id');
-    var selected = this.gitEngine.HEAD.get('target').get('id');
+  getIsRemote: function() {
+    return this.get('branch').getIsRemote();
+  },
 
-    var add = (selected == name) ? '*' : '';
-    return name + add;
+  getName: function() {
+    var name = this.get('branch').getName();
+    var selected = this.get('branch') === this.gitEngine.HEAD.get('target');
+
+    var after = (selected) ? '*' : '';
+    return name + after;
   },
 
   nonTextToFront: function() {
@@ -16292,6 +16582,7 @@ var VisBranch = VisBase.extend({
     var rectSize = this.getRectSize();
 
     var arrowPath = this.getArrowPath();
+    var dashArray = (this.getIsRemote()) ? '--' : '';
 
     return {
       text: {
@@ -16307,6 +16598,7 @@ var VisBranch = VisBase.extend({
         opacity: nonTextOpacity,
         fill: this.getFill(),
         stroke: this.get('stroke'),
+        'stroke-dasharray': dashArray,
         'stroke-width': this.get('stroke-width')
       },
       arrow: {
@@ -16784,25 +17076,28 @@ require.define("/src/levels/index.js",function(require,module,exports,__dirname,
 // a sequence proceed in the order listed here
 exports.levelSequences = {
   intro: [
-    require('../../levels/intro/1').level,
-    require('../../levels/intro/2').level,
-    require('../../levels/intro/3').level,
-    require('../../levels/intro/4').level
+    require('../../levels/intro/commits').level,
+    require('../../levels/intro/branching').level,
+    require('../../levels/intro/merging').level,
+    require('../../levels/intro/rebasing').level
   ],
   rampup: [
-    require('../../levels/rampup/1').level,
-    require('../../levels/rampup/2').level,
-    require('../../levels/rampup/3').level,
-    require('../../levels/rampup/4').level
+    require('../../levels/rampup/detachedHead').level,
+    require('../../levels/rampup/relativeRefs').level,
+    require('../../levels/rampup/relativeRefs2').level,
+    require('../../levels/rampup/reversingChanges').level
   ],
   rebase: [
-    require('../../levels/rebase/1').level,
-    require('../../levels/rebase/2').level
+    require('../../levels/rebase/manyRebases').level
   ],
   mixed: [
-    require('../../levels/mixed/1').level,
-    require('../../levels/mixed/2').level,
-    require('../../levels/mixed/3').level
+    require('../../levels/mixed/grabbingOneCommit').level,
+    require('../../levels/mixed/jugglingCommits').level,
+    require('../../levels/mixed/jugglingCommits2').level
+  ],
+  advanced: [
+    require('../../levels/advanced/multipleParents').level,
+    require('../../levels/rebase/selectiveRebase').level
   ]
 };
 
@@ -16811,51 +17106,71 @@ exports.sequenceInfo = {
   intro: {
     displayName: {
       'en_US': 'Introduction Sequence',
+      'ja': 'まずはここから',
       'fr_FR': 'Sequence d\'introduction',
-      'zh_CN': '简介序列',
+      'zh_CN': '序列简介',
       'ko': '기본 명령어'
     },
     about: {
       'en_US': 'A nicely paced introduction to the majority of git commands',
+      'ja': 'gitの基本的なコマンド群をほどよいペースで学ぶ',
       'fr_FR': 'Une introduction en douceur à la majoité des commandes git',
-      'zh_CN': '一个节奏感良好的主流 Git 命令介绍',
+      'zh_CN': '循序渐进介绍git主要命令',
       'ko': '브랜치 관련 주요 git 명령어를 깔끔하게 알려드립니다'
     }
   },
   rampup: {
     displayName: {
-      'en_US': 'Ramping Up'
+      'en_US': 'Ramping Up',
+      'ja': '次のレベルに進もう',
+      'zh_CN': '进阶篇'
     },
     about: {
-      'en_US': 'The next serving of 100% git awesomes-ness. Hope you\'re hungry'
+      'en_US': 'The next serving of 100% git awesomes-ness. Hope you\'re hungry',
+      'ja': '更にgitの素晴らしさを堪能しよう',
+      'zh_CN': '接下来是git的超赞特性。迫不及待了吧!'
     }
   },
   rebase: {
     displayName: {
       'en_US': 'Master the Rebase Luke!',
+      'ja': 'Rebaseをモノにする',
       'fr_FR': 'Maîtrise Rebase, Luke!',
-      'zh_CN': '掌握衍合，兄弟！',
+      'zh_CN': '精通Rebase！',
       'ko': '리베이스 완전정복!'
     },
     about: {
       'en_US': 'What is this whole rebase hotness everyone is talking about? Find out!',
+      'ja': '話題のrebaseってどんなものだろう？って人にオススメ',
       'fr_FR': 'Que\'est-ce que c\'est que ce rebase dont tout le monde parle ? Découvrez-le !',
       'ko': '그 좋다고들 말하는 rebase에 대해 알아봅시다!',
-      'zh_CN': '大家说的火热的衍合都是些神马？看看吧！'
+      'zh_CN': '大家都在说的rebase究竟是神马？看看吧！'
     }
   },
   mixed: {
     displayName: {
       'en_US': 'A Mixed Bag',
+      'ja': '様々なtips',
       'fr_FR': 'Un assortiment',
       'ko': '종합선물세트',
       'zh_CN': '大杂烩？'
     },
     about: {
       'en_US': 'A mixed bag of Git techniques, tricks, and tips',
+      'ja': 'gitを使う上での様々なtipsやテクニックなど',
       'fr_FR': 'Un assortiment de techniques et astuces pour utiliser Git',
       'ko': 'Git을 다루는 다양한 팁과 테크닉을 다양하게 알아봅니다',
-      'zh_CN': 'Git技术，技巧与贴士'
+      'zh_CN': 'Git技术，技巧与贴士杂烩'
+    }
+  },
+  advanced: {
+    displayName: {
+      'en_US': 'Advanced Topics',
+      'zh_CN': '高级主题'
+    },
+    about: {
+      'en_US': 'For the truly brave!',
+      'zh_CN': '只为真正的勇士！'
     }
   }
 };
@@ -16863,12 +17178,13 @@ exports.sequenceInfo = {
 
 });
 
-require.define("/levels/intro/1.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/levels/intro/commits.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "name": {
     "en_US": "Introduction to Git Commits",
     "fr_FR": "Introduction aux commits avec Git",
+    "ja": "Gitのコミット",
     'ko': 'Git 커밋 소개',
-    'zh_CN': '介绍Git提交'
+    'zh_CN': 'Git Commits简介'
   },
   "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C3\",\"id\":\"master\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C2\"],\"id\":\"C3\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
   "solutionCommand": "git commit;git commit",
@@ -16877,6 +17193,7 @@ require.define("/levels/intro/1.js",function(require,module,exports,__dirname,__
     "en_US": "Just type in 'git commit' twice to finish!",
     "fr_FR": "Il suffit de saisir 'git commit' deux fois pour réussir !",
     "zh_CN": "敲两次 'git commit' 就好啦！",
+    "ja": "'git commit'コマンドを2回打てば完成!",
     "ko": "'git commit'이라고 두 번 치세요!"
   },
   "disabledMap": {
@@ -16924,6 +17241,52 @@ require.define("/levels/intro/1.js",function(require,module,exports,__dirname,__
           "options": {
             "markdowns": [
               "Go ahead and try it out on your own! After this window closes, make two commits to complete the level"
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Gitのコミット",
+              "コミットによって、ディレクトリ中の全てのファイルのスナップショットを記録します。巨大なコピー＆ペーストのようなものですが、実はそれよりずっと良いものです。",
+              "",
+              "Gitではコミットを可能な限り軽量に保つために、コミット毎にフォルダ全体をコピーしません。実際にはGitは、コミットを直前のバージョンから一つ先のバージョンへの「変更の固まり」あるいは「差分」として記録します。後で出てきますが、ほとんどのコミットが親を持っているのはそういう理由からです。",
+              "",
+              "リポジトリをcloneする時には、内部動作としてはコミットの差分をたどって全ての変更を取得しています。cloneした時に以下のような表示が出るのは：",
+              "",
+              "`resolving deltas`（訳：差分を解決中）",
+              "",
+              "このためです。",
+              "",
+              "もっと説明したいところですが、しばらくはコミットをスナップショットのようなものだと考えてください。コミットは非常に軽量であり、コミット間の移動も非常に高速です。"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "これがどういうことか、動きを見ていきましょう。図には（小さな）gitリポジトリが描かれています。コミットが2つあります ― `C0`という名前の初回のコミットがあり、`C1`という名前の次のコミットが続きます。これは何か意味のある変更かもしれません。",
+              "",
+              "下のボタンを押下して新しいコミットを作ってみましょう。"
+            ],
+            "afterMarkdowns": [
+              "できました! 良いですね。いまリポジトリに新しい変更が加えられ、1つのコミットとして保存されました。作成したコミットには親がいて、このコミットの出発点となった`C1`を指しています。"
+            ],
+            "command": "git commit",
+            "beforeCommand": ""
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "実際に手を動かしてみましょう。このウィンドウを閉じたら、試しに2回コミットをしてみましょう。"
             ]
           }
         }
@@ -17026,15 +17389,15 @@ require.define("/levels/intro/1.js",function(require,module,exports,__dirname,__
           "options": {
             "markdowns": [
               "## Git Commits",
-              "在一个使用 git 进行版本控制的仓库里，一次提交（commit）给你目录下所有文件做了一次快照，就好像是做了一次复制粘贴，但 git 做的不只那么简单！",
+              "git仓库中的一次提交（commit）记录目录下所有文件的快照。感觉像是大量的复制和粘贴，但 git 做的不只这么简单！",
               "",
-              "Git 希望尽可能地让这些提交记录保持轻量，所以每次在你进行提交的时候，它不会就这么复制整个工作目录。实际上它把每次提交都记录为一个相对于上个版本变化的集合，或者说一个\"差异 （delta）\"集。这也是为什么绝大部分提交都有一个父对象（parent commit） -- 迟点你就会在我们的演示中看见了。",
+              "Git 希望提交记录尽可能地轻量，所以每次进行提交时，它不会简单地复制整个目录。实际上它把每次提交记录保存为从代码库的一个版本到下一个版本的变化集，或者说一个\"增量（delta）\"。所以，大部分提交记录都有一个父提交（parent commit）-- 我们会很快演示这一点。",
               "",
-              "假如你要克隆（clone）一个仓库，你就要去解包（unpack）或者“解决（resolve）”这些差异。所以当你克隆一个仓库时会在命令行下看见这样的命令：",
+              "克隆（clone）代码库时，需要解包（unpack）或者“解析（resolve）”所有的差异。所以在克隆代码库时，可能会看见如下命令行输出：",
               "",
               "`resolving deltas`",
               "",
-              "要完全理解这些概念可能要花费很多时间，但现在你可以把提交看作是项目的快照，提交非常轻量而且在它们之间切换的时候非常快。"
+              "要学的东西有很多，但现在你可以把提交记录看作是项目的快照。提交记录非常轻量且可以快速切换！"
             ]
           }
         },
@@ -17042,13 +17405,13 @@ require.define("/levels/intro/1.js",function(require,module,exports,__dirname,__
           "type": "GitDemonstrationView",
           "options": {
             "beforeMarkdowns": [
-              "让我们在练习里好好了解提交是什么玩意。在右边展示的是一个使用 git 管理的（小）仓库。现在有两个提交 —— 一个是初始提交 `C0`，另外一个可能包含了一些有意义修改的提交是`C1`。",
+              "在实践中学习commit。右边是一个（小）git代码库的图示。当前有两个提交记录—— 初始提交`C0`和其后可能包含有用修改的提交`C1`。",
               "",
-              "点下面的按钮来生成一个新的提交。"
+              "点击下面的按钮生成新的提交记录。"
             ],
             "command": "git commit",
             "afterMarkdowns": [
-              "看！碉堡吧！我们刚刚对这个仓库进行了一点修改，并且把这些修改提交了。我们刚刚做的提交有一个爸爸（parent），叫 `C1`，代表这个修改是基于`C1`的。"
+              "看！碉堡吧！我们修改了代码，并保存为一次提交记录。刚刚做的提交`C2`有一个父提交（parent）`C1`，代表此次修改的基础。"
             ],
             "beforeCommand": ""
           }
@@ -17057,7 +17420,7 @@ require.define("/levels/intro/1.js",function(require,module,exports,__dirname,__
           "type": "ModalAlert",
           "options": {
             "markdowns": [
-              "接下来你可以继续尝试下。在这个窗口关闭之后，提交两遍就可以过关！"
+              "接下来你可以随便测试。当前窗口关闭后，完成两次提交就可以过关！"
             ]
           }
         }
@@ -17068,19 +17431,21 @@ require.define("/levels/intro/1.js",function(require,module,exports,__dirname,__
 
 });
 
-require.define("/levels/intro/2.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/levels/intro/branching.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C1\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C1\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"}},\"HEAD\":{\"target\":\"bugFix\",\"id\":\"HEAD\"}}",
   "solutionCommand": "git branch bugFix;git checkout bugFix",
   "name": {
     "en_US": "Branching in Git",
+    "ja": "Gitのブランチ",
     "ko": "Git에서 브랜치 쓰기",
     "fr_FR": "Gérer les branches avec Git",
-    "zh_CN": "Git开分支"
+    "zh_CN": "建立Git分支"
   },
   "hint": {
     "en_US": "Make a new branch with \"git branch [name]\" and check it out with \"git checkout [name]\"",
+    "ja": "ブランチの作成（\"git branch [ブランチ名]\"）と、チェックアウト（\"git checkout [ブランチ名]\"）",
     "fr_FR": "Faites une nouvelle branche avec \"git branch [nom]\" positionnez-vous dans celle-ci avec \"git checkout [nom]\"",
-    "zh_CN": "用 'git branch [新分支名字]' 来创建新分支，并用 'git checkout [新分支]' 切换到新分支",
+    "zh_CN": "用 'git branch [分支名]' 来创建分支，用 'git checkout [分支名]' 切换到分支",
     "ko": "\"git branch [브랜치명]\"으로 새 브랜치를 만들고, \"git checkout [브랜치명]\"로 그 브랜치로 이동하세요"
   },
   "disabledMap": {
@@ -17160,6 +17525,84 @@ require.define("/levels/intro/2.js",function(require,module,exports,__dirname,__
             "markdowns": [
               "Ok! You are all ready to get branching. Once this window closes,",
               "make a new branch named `bugFix` and switch to that branch"
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Gitのブランチ",
+              "",
+              "Gitではコミットだけでなく、ブランチもまた信じられないほど軽量です。ブランチとは単に特定のコミットを指示したポインタにしか過ぎません。Gitの達人は決まってこう言うのは、そのためです：",
+              "",
+              "```",
+              "早めに、かつ頻繁にブランチを切りなさい",
+              "```",
+              "",
+              "どれほど多くのブランチを作ってもストレージやメモリを全然使わないので、ブランチを肥大化させるよりも論理的に分割していく方が簡単なのです。",
+              "",
+              "ブランチとコミットをあわせて使い始めると、これら2つのフィーチャがどのように連動して機能するかがわかるでしょう。ここではとりあえず、ブランチは基本的には「あるコミットとその親のコミットたちを含めた全てのコミット」のことを呼ぶと覚えておいてください。"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "では実際にブランチがどのようなものかを見ていきましょう。",
+              "",
+              "`newImage`という名前の新しいブランチを切ってみることにします。"
+            ],
+            "afterMarkdowns": [
+              "以上。必要な手順はこれだけです。いま作成された`newImage`ブランチは`C1`コミットを指しています。"
+            ],
+            "command": "git branch newImage",
+            "beforeCommand": ""
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "この新しいブランチに何か変更を加えてみましょう。次のボタンを押してください。"
+            ],
+            "afterMarkdowns": [
+              "あれ？`newImage`ではなくて`master`ブランチが移動してしまいました。これは、私たちが`newImage`のブランチ上で作業していなかったためです。どのブランチで作業しているかは、アスタリスク(*)がついてるかどうかで分かります。"
+            ],
+            "command": "git commit",
+            "beforeCommand": "git branch newImage"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "今度は作業したいブランチ名をgitに伝えてみましょう。",
+              "",
+              "```",
+              "git checkout [ブランチ名]",
+              "```",
+              "",
+              "このようにして、コミットする前に新しいブランチへと作業ブランチを移動することができます。"
+            ],
+            "afterMarkdowns": [
+              "できましたね。今度は新しいブランチに対して変更を記録することができました。"
+            ],
+            "command": "git checkout newImage; git commit",
+            "beforeCommand": "git branch newImage"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "OK! もうどんなブランチでも切れますね。このウィンドウを閉じて、",
+              "`bugFix`という名前のブランチを作成し、そのブランチをチェックアウトしてみましょう。"
             ]
           }
         }
@@ -17251,15 +17694,15 @@ require.define("/levels/intro/2.js",function(require,module,exports,__dirname,__
             "markdowns": [
               "## Git Branches",
               "",
-              "在 Git 里面，分支也是非常轻量。它们实际上就是对特定的提交的一个简单参照（reference） —— 对，就是那么简单。所以许多鼓吹 Git 的玩家会反复吟诵这么一句咒语：",
+              " Git 的分支非常轻量。它们只是简单地指向某个提交纪录——仅此而已。所以许多Git爱好者会念叨：",
               "",
               "```",
-              "早点开分支！多点开分支！（branch early, and branch often）",
+              "早点建分支！经常建分支！",
               "```",
               "",
-              "因为创建分支不会带来任何储存（硬盘和内存）上的开销，所以你大可以根据需要将你的工作划分成几个分支，而不是使用只使用一个巨大的分支（beefy）。",
+              "创建分支没有储存或内存上的开销，所以按逻辑分解工作比维护单一的代码树要简单。",
               "",
-              "当我们开始将分支和提交混合一起使用之后，将会看见两者混合所带来的特性。从现在开始，只要记住使用分支其实就是在说：“我想把这次提交和它的父提交都包含进去。（I want to include the work of this commit and all parent commits.）”"
+              "同时使用分支和提交时，我们会看到两者如何配合。现在，只要记住使用分支其实就是在说：“我想包含本次提交及所有的父提交记录。”"
             ]
           }
         },
@@ -17267,13 +17710,13 @@ require.define("/levels/intro/2.js",function(require,module,exports,__dirname,__
           "type": "GitDemonstrationView",
           "options": {
             "beforeMarkdowns": [
-              "让我们在实践中看看分支究竟是怎样的。",
+              "举个例子看看分支究竟是什么。",
               "",
-              "现在我们会检出（check out）到一个叫 `newImage` 的新分支。"
+              "这里，我们切换到到名为`newImage`的新分支。"
             ],
             "command": "git branch newImage",
             "afterMarkdowns": [
-              "看，这就是分支啦！`newImage` 这个分支现在是指向提交 `C1`。"
+              "看，这就是建立分支所需的操作啦！`newImage`分支现在指向提交记录`C1`。"
             ],
             "beforeCommand": ""
           }
@@ -17282,11 +17725,11 @@ require.define("/levels/intro/2.js",function(require,module,exports,__dirname,__
           "type": "GitDemonstrationView",
           "options": {
             "beforeMarkdowns": [
-              "现在让我们往这个新分支里添加一点修改。按一下下面的按钮。"
+              "现在让我们修改一下新分支。点击下面的按钮。"
             ],
             "command": "git commit",
             "afterMarkdowns": [
-              "啊摔！`master` 分支前进了，但是 `newImage` 分支没有哇！这是因为我们没有“在”这个新分支上，这也是为什么星号（*）只在 `master` 上。"
+              "啊摔！`master`分支前进了，但`newImage`分支没有哇！这是因为我们没有“在”这个新分支上，这也是为什么星号（*）只在 `master` 上。"
             ],
             "beforeCommand": "git branch newImage"
           }
@@ -17295,17 +17738,17 @@ require.define("/levels/intro/2.js",function(require,module,exports,__dirname,__
           "type": "GitDemonstrationView",
           "options": {
             "beforeMarkdowns": [
-              "要切换到一个分支，我们可以这样告诉 git",
+              "使用如下命令告诉git我们想要切换到新的分支",
               "",
               "```",
               "git checkout [name]",
               "```",
               "",
-              "这样就可以让我们在提交修改之前切换到新的分支了。"
+              "这可以让我们在提交修改之前切换到新的分支。"
             ],
             "command": "git checkout newImage; git commit",
             "afterMarkdowns": [
-              "好的嘞！我们的修改已经记录在新的分支里了。"
+              "好的嘞！新的分支已经记录了我们的修改。"
             ],
             "beforeCommand": "git branch newImage"
           }
@@ -17314,8 +17757,8 @@ require.define("/levels/intro/2.js",function(require,module,exports,__dirname,__
           "type": "ModalAlert",
           "options": {
             "markdowns": [
-              "好啦，现在你可以准备使用分支了。这个窗口关闭以后，",
-              "创建一个叫 `bugFix` 的新分支，然后切换到那里。"
+              "好啦，你已经准备好使用分支了。当前窗口关闭后，",
+              "创建一个叫 `bugFix` 的新分支，然后切换过去。"
             ]
           }
         }
@@ -17404,19 +17847,21 @@ require.define("/levels/intro/2.js",function(require,module,exports,__dirname,__
 
 });
 
-require.define("/levels/intro/3.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
-  "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C4\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C2\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C2\",\"C3\"],\"id\":\"C4\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
+require.define("/levels/intro/merging.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+  "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C4\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C2\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C3\",\"C2\"],\"id\":\"C4\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
   "solutionCommand": "git checkout -b bugFix;git commit;git checkout master;git commit;git merge bugFix",
   "name": {
     "en_US": "Merging in Git",
     "fr_FR": "Faire des 'merge' (fusions de branches) avec Git",
     "ko": "Git에서 브랜치 합치기(Merge)",
-    "zh_CN": "Git合并(Merge)"
+    "ja": "ブランチとマージ",
+    "zh_CN": "分支与合并"
   },
   "hint": {
     "en_US": "Remember to commit in the order specified (bugFix before master)",
+    "ja": "指示された順番でコミットすること（masterの前にbugFixで）",
     "fr_FR": "Pensez à faire des commits dans l'ordre indiqué (bugFix avant master)",
-    "zh_CN": "记得按照给定的顺序来进行提交(commit) （bugFix 要在 master 之前）",
+    "zh_CN": "记住按指定的顺序提交（bugFix先于master）",
     "ko": "말씀드린 순서대로 커밋해주세요 (bugFix에 먼저 커밋하고 master에 커밋)"
   },
   "disabledMap": {
@@ -17467,7 +17912,7 @@ require.define("/levels/intro/3.js",function(require,module,exports,__dirname,__
             "afterMarkdowns": [
               "Since `bugFix` was downstream of `master`, git didn't have to do any work; it simply just moved `bugFix` to the same commit `master` was attached to.",
               "",
-              "Now all the commits are the same color, which means each branch contains all the work in the repository! Woohoo"
+              "Now all the commits are the same color, which means each branch contains all the work in the repository! Woohoo!"
             ],
             "command": "git checkout bugFix; git merge master",
             "beforeCommand": "git checkout -b bugFix; git commit; git checkout master; git commit; git merge bugFix"
@@ -17487,6 +17932,75 @@ require.define("/levels/intro/3.js",function(require,module,exports,__dirname,__
               "* Merge the branch `bugFix` into `master` with `git merge`",
               "",
               "*Remember, you can always re-display this dialog with \"help level\"!*"
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## ブランチとマージ",
+              "",
+              "いい調子ですね。これまでにコミットとブランチについて学びました。そろそろ2つのブランチを1つにまとめるやり方について見ていきましょう。これができれば新しいフィーチャの開発のために新しいブランチを切って、開発が終わったら変更を元のブランチへ統合することができるようになります。",
+              "",
+              "はじめに紹介するのは、`git merge`を使ったマージのやり方です。mergeコマンドによって、2つの独立した親を持つ特別なコミットを作ることができます。2つの親を持つコミットが持つ意味とは、「全く別々の場所にいるこの親とその親（*かつ*、それらの親の祖先全て）が持つ全ての変更を含んでいますよ」ということです。",
+              "",
+              "見てみた方が早いので、次の画面で確認してみましょう。"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "それぞれ別のコミットを指している2つのブランチがあります。変更が別々のブランチに分散していて統合されていないケースです。これをマージで1つにまとめてみましょう。",
+              "",
+              "`bugFix`ブランチを`master`ブランチにマージしてみます。"
+            ],
+            "afterMarkdowns": [
+              "わあ。見ましたか？まず初めに、`master`ブランチが2つのコミットを親に持つ新しいコミットを指してますね。`master`から親をたどっていくと、最も古いコミットにたどり着くまでに全てのコミットを含んでいる様が確認できます。これで、全ての変更を含む`master`が完成しました。",
+              "",
+              "色がどう変わったかにも注目して下さい。学習を助けるために、ブランチ毎に色をつけています。それぞれのブランチは自分の色を持っていて、どのブランチから派生して出てくるか次第でコミットごとの色が決まります。",
+              "",
+              "今回のコミットには`master`ブランチの色が使われました。しかし`bugFix`ブランチの色がまだ変わってないようなので、これを変えてみましょう。"
+            ],
+            "command": "git merge bugFix",
+            "beforeCommand": "git checkout -b bugFix; git commit; git checkout master; git commit"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "`master`ブランチを`bugFix`ブランチにマージしてみます。"
+            ],
+            "afterMarkdowns": [
+              "`bugFix`ブランチは`master`ブランチの派生元だったので、gitは実際大したことはしていません：`bugFix`ブランチを指していたポインタを`master`が指していたコミットへと移動させただけです。",
+              "",
+              "これで全てのコミットが同じ色になりました。つまり、リポジトリの中の全ての変更をそれぞれのブランチが持ったことになります。やったね！"
+            ],
+            "command": "git checkout bugFix; git merge master",
+            "beforeCommand": "git checkout -b bugFix; git commit; git checkout master; git commit; git merge bugFix"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "以下の作業で理解度の確認をしてみましょう。 steps:",
+              "",
+              "* `bugFix`という名前で新しいブランチを切る",
+              "* `git checkout bugFix`コマンドで`bugFix`ブランチをチェックアウトする",
+              "* 一回だけコミット",
+              "* `git checkout`で`master`へ戻る",
+              "* もう1回コミットする",
+              "* `git merge`コマンドを使って、`bugFix`ブランチを`master`ブランチへとマージする",
+              "",
+              "*注：\"help level\"コマンドでこのヘルプにいつでも戻ってこれます*"
             ]
           }
         }
@@ -17536,7 +18050,7 @@ require.define("/levels/intro/3.js",function(require,module,exports,__dirname,__
             "afterMarkdowns": [
               "Puisque `bugFix` était un descendant de `master`, git n'avait aucun travail à effectuer; il a simplement déplacé `bugFix` au même commit auquel `master` est attaché.",
               "",
-              "Maintenant tous les commits sont de la même couleur, ce qui indique que chaque branche contient tout le contenu du dépôt ! Woohoo"
+              "Maintenant tous les commits sont de la même couleur, ce qui indique que chaque branche contient tout le contenu du dépôt ! Woohoo!"
             ],
             "command": "git checkout bugFix; git merge master",
             "beforeCommand": "git checkout -b bugFix; git commit; git checkout master; git commit; git merge bugFix"
@@ -17569,11 +18083,11 @@ require.define("/levels/intro/3.js",function(require,module,exports,__dirname,__
             "markdowns": [
               "## Branches and Merging",
               "",
-              "Great! 现在我们已经知道怎么提交和使用分支了。接下来要学的一招是怎么把两个不同分支的工作合并起来。这样做是为了让我们在创建新的分支，开发新的东西之后，把新的东西合并回来。",
+              "Great! 我们已经知道怎么提交和使用分支了。接下来要学的一招是如何合并两个不同分支的工作。这让我们可以新建一个分支，在其上开发新功能，然后合并回主线。",
               "",
-              "我们将要学的第一个组合方法是 `git merge`。在 Git 里进行合并（Merging）会产生一个拥有两个各不相同的父提交的特殊提交（commit）。这个特殊提交本质上就是：“把这两个各不相同的父提交*以及*它们的父提交集合的所有内容都包含进来。”",
+              "`git merge`是我们要学习的合并工作的第一个方法。合并产生一个特殊的提交记录，它包含两个唯一父提交。有两个父提交的提交记录本质上是：“我想把这两个父提交本身及它们的父提交集合都包含进来。”",
               "",
-              "听起来可能有点拗口，看看下一张就明白了。"
+              "有图有真相，看看下面的图示就明白了。"
             ]
           }
         },
@@ -17581,17 +18095,17 @@ require.define("/levels/intro/3.js",function(require,module,exports,__dirname,__
           "type": "GitDemonstrationView",
           "options": {
             "beforeMarkdowns": [
-              "现在我们有两个分支：每一个都有一个特有的提交。也就是说没有一个分支包含了仓库的所有工作。现在让我们用合并来将它们组合在一起吧。",
+              "当前有两个分支：各有一个唯一的提交。这意味着没有一个分支包含我们对代码库的所有修改。让我们合并这两个分支来解决这个问题。",
               "",
-              "我们将要把分支 `bugFix` 合并到 `master` 上"
+              "我们要把 `bugFix` 合并到 `master` "
             ],
             "command": "git merge bugFix",
             "afterMarkdowns": [
-              "哇！看见木有？`master` 分支现在指向了一个拥有两个爸爸的提交。假如你从 `master` 开始沿着箭头走到起点，沿路你可以遍历到所有的提交。这就表明 `master` 包含了仓库里所有的内容了。",
+              "哇！看见木有？首先，`master` 现在指向一个拥有两个父提交的提交记录。假如从 `master` 开始沿着箭头向上游走，在到达起点的路上会经过所有的提交记录。这说明有 `master` 包含了对代码库的所有修改。",
               "",
-              "还有，看见各个提交的颜色的变化了吗？为了帮助学习，我添加了一些颜色混合。每个分支都有特定的颜色。每个提交的颜色都是含有这个提交的分支的颜色的混合。",
+              "还有，看见各个提交记录的颜色变化了吗？为了帮助学习，我使用了颜色混合。每个分支都有特定的颜色。每个提交记录都变成了含有此提交的所有分支的混合色。",
               "",
-              "所以我们可以看见 `master` 分支的颜色是所有提交的颜色的混合，但是 `bugFix` 不是。接下来就改一下这里吧。"
+              "所以，`master` 分支的颜色被混入到所有的提交记录，但 `bugFix` 没有。接下来就改一下这里吧。"
             ],
             "beforeCommand": "git checkout -b bugFix; git commit; git checkout master; git commit"
           }
@@ -17604,9 +18118,9 @@ require.define("/levels/intro/3.js",function(require,module,exports,__dirname,__
             ],
             "command": "git checkout bugFix; git merge master",
             "afterMarkdowns": [
-              "因为 `bugFix` 分支在 `master` 分支的上游，所以 git 不用做什么额外的工作，只要把 `master` 分支的最新提交移到 `bugFix` 分支就可以了。",
+              "因为 `bugFix` 分支在 `master` 分支的下游，git什么都不用做，只是简单地把`bugfix`分支移动到`master`指向的提交记录。",
               "",
-              "现在所有的提交的颜色都是一样的啦，这表明现在所有的分支都包含了仓库里所有的东西！走起！"
+              "现在所有的提交记录的颜色都是一样的啦，这表明每一个分支都包含了代码库的所有修改！走起！"
             ],
             "beforeCommand": "git checkout -b bugFix; git commit; git checkout master; git commit; git merge bugFix"
           }
@@ -17615,16 +18129,16 @@ require.define("/levels/intro/3.js",function(require,module,exports,__dirname,__
           "type": "ModalAlert",
           "options": {
             "markdowns": [
-              "想刷过这关，要按照下面的步骤来：",
+              "想完成此关，执行收下操作：",
               "",
-              "* 创建一个叫 `bugFix` 的新分支",
-              "* 用 `git checkout bugFix` 切换到分支 `bugFix`",
-              "* 创建一个提交",
-              "* 再用 `git checkout` 切换回 `master` 上",
-              "* 创建另外一个提交",
-              "* 用 `git merge` 把分支 `bugFix` 合并进 `master` 里",
+              "* 创建新分支 `bugFix` ",
+              "* 用 `git checkout bugFix` 切换到 `bugFix`分支",
+              "* 提交一次",
+              "* 用 `git checkout` 切换回 `master` ",
+              "* 再提交一次",
+              "* 用 `git merge` 合并 `bugFix`分支进 `master`",
               "",
-              "*友情提示，可以使用 \"help level\" 命令来重新显示这个窗口哦！*"
+              "*记住，总是可以用 \"help level\" 命令来重新显示这个对话框！*"
             ]
           }
         }
@@ -17704,17 +18218,19 @@ require.define("/levels/intro/3.js",function(require,module,exports,__dirname,__
 
 });
 
-require.define("/levels/intro/4.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/levels/intro/rebasing.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "goalTreeString": "%7B%22branches%22%3A%7B%22master%22%3A%7B%22target%22%3A%22C3%22%2C%22id%22%3A%22master%22%7D%2C%22bugFix%22%3A%7B%22target%22%3A%22C2%27%22%2C%22id%22%3A%22bugFix%22%7D%7D%2C%22commits%22%3A%7B%22C0%22%3A%7B%22parents%22%3A%5B%5D%2C%22id%22%3A%22C0%22%2C%22rootCommit%22%3Atrue%7D%2C%22C1%22%3A%7B%22parents%22%3A%5B%22C0%22%5D%2C%22id%22%3A%22C1%22%7D%2C%22C2%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C2%22%7D%2C%22C3%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C3%22%7D%2C%22C2%27%22%3A%7B%22parents%22%3A%5B%22C3%22%5D%2C%22id%22%3A%22C2%27%22%7D%7D%2C%22HEAD%22%3A%7B%22target%22%3A%22bugFix%22%2C%22id%22%3A%22HEAD%22%7D%7D",
   "solutionCommand": "git checkout -b bugFix;git commit;git checkout master;git commit;git checkout bugFix;git rebase master",
   "name": {
     "en_US": "Rebase Introduction",
+    "ja": "Rebaseの解説",
     "fr_FR": "Introduction à rebase",
     "ko": "리베이스(rebase)의 기본",
-    "zh_CN": "介绍衍合(rebase)"
+    "zh_CN": "Rebase简介"
   },
   "hint": {
     "en_US": "Make sure you commit from bugFix first",
+    "ja": "初めにbugFixを指した状態でコミットする",
     "fr_FR": "Assurez-vous de bien faire votre en premier votre commit sur bugFix",
     "ko": "bugFix 브랜치에서 먼저 커밋하세요",
     "zh_CN": "确保你先在 bugFix 分支进行提交"
@@ -17785,6 +18301,73 @@ require.define("/levels/intro/4.js",function(require,module,exports,__dirname,__
               "* Check out bugFix again and rebase onto master",
               "",
               "Good luck!"
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Git Rebase",
+              "",
+              "ブランチを一つにまとめる方法として前回はマージを紹介しましたが、今回紹介するリベースを使うこともできます。リベースの動作は、マージするコミットのコピーをとって、どこかにストンと落とすというイメージです。",
+              "",
+              "ピンと来ないかもしれませんが、リベースのメリットは一本の連続したシーケンシャルなコミットに整形できることです。リベースだけ使っていると、コミットのログや履歴が非常にクリーンな状態に保たれます。",
+              "",
+              "早速実際にどう動くのかを見てみましょう。"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "前回と同様の2つのブランチを考えます：仮にいまbugFixブランチをチェックアウトしているとします。（アスタリスクつきのもの）",
+              "",
+              "bugFixに入ってる作業内容をそのまま直接masterブランチ上の内容に移動したいとします。こうすることで、実際には並行して開発された2つの別々のブランチ上のフィーチャを、あたかも1本のブランチ上でシーケンシャルに開発されていたかのように見せることができます。",
+              "",
+              "`git rebase`コマンドでそれをやってみましょう。"
+            ],
+            "afterMarkdowns": [
+              "できた！これでbugFixブランチの作業内容はmasterブランチのすぐ先に移動したので、見た目が一本になってスッキリしました。",
+              "",
+              "気を付けてほしいのは、C3コミットはどこかに残ってるということ（ツリーの中で半透明にしてあります）、そしてC3'は（C3との接続が切れているC3の）コピーがmasterブランチ上に作られているということです。",
+              "",
+              "一つ問題が残ってて、masterブランチがまだ最新化されていませんね。ちょっと直してみましょう。。"
+            ],
+            "command": "git rebase master",
+            "beforeCommand": "git commit; git checkout -b bugFix C1; git commit"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "masterブランチはチェックアウトしてあります。この状態からmasterブランチを`bugFix`へとリベースしてみましょう。"
+            ],
+            "afterMarkdowns": [
+              "できた！`master`は`bugFix`の直前のコミットだったので、gitは単純に`master`ブランチのポインタを前に進めただけでした。"
+            ],
+            "command": "git rebase bugFix",
+            "beforeCommand": "git commit; git checkout -b bugFix C1; git commit; git rebase master; git checkout master"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "以下の作業で理解度の確認をしてみましょう。",
+              "",
+              "* `bugFix`という名前の新しいブランチをチェックアウトする",
+              "* 一回だけコミット",
+              "* masterブランチに戻ってもう1回コミット",
+              "* bugFixをもう1回チェックアウトして、master上にリベース",
+              "",
+              "幸運を祈る！"
             ]
           }
         }
@@ -17863,9 +18446,9 @@ require.define("/levels/intro/4.js",function(require,module,exports,__dirname,__
             "markdowns": [
               "## Git Rebase",
               "",
-              "第二种合并不用分支工作的方法是 *衍合（rebasing）*。衍合就是取出一系列的提交，\"组合（compies）\"它们，然后把它们在某个地方重新放下来（重新实施一遍）。",
+              "*rebasing*是在分支之间合并工作的第二种方法。Rebasing就是取出一系列的提交记录，\"复制\"它们，然后把在别的某个地方放下来。",
               "",
-              "这可能看上去很难明白，而衍合的最大好处就是可以用来创造更线性的提交历史。假如一个项目只允许使用衍合（来合并工作），那么它的提交记录/历史会变得好看很多。",
+              "虽然听上去难以理解，rebasing 的优势是可以创造更线性的提交历史。假如只允许使用rebasing，代码库的提交日志/历史会更好看。",
               "",
               "让我们亲身体会下……"
             ]
@@ -17875,19 +18458,19 @@ require.define("/levels/intro/4.js",function(require,module,exports,__dirname,__
           "type": "GitDemonstrationView",
           "options": {
             "beforeMarkdowns": [
-              "现在我们有两个分支，注意当前分支是 bugFix（看那颗星）",
+              "这里，还是有两个分支；注意当前分支是 bugFix（看那颗星）",
               "",
-              "我们想要把 bugfix 里面的工作直接移到 master 分支上。使用这个方法会让我们觉得这两个特性分支的工作是顺序提交的，但实际上它们是平行发展提交的。",
+              "我们想要把 bugfix 里面的工作直接移到 master 分支上。使用这个方法，两个分支的功能看起来像是按顺序开发，实际上它们是平行开发的。",
               "",
-              "要做到这个效果，我们用 `git rebase`"
+              "用 `git rebase`实现此目标"
             ],
             "command": "git rebase master",
             "afterMarkdowns": [
-              "碉堡吧，现在我们在 bugFix 分支上的工作已经移到了 master 的最前端，同时我们也得到了一个很好的直线型提交历史。",
+              "碉堡吧，现在 bugFix 分支上的工作在 master 的最前端，同时我们也得到了一个更线性的提交序列。",
               "",
-              "注意一下提交 C3 其实还存在在我们的仓库的某个角落里（阴影的那货就是你了，还看什么看），而 C3' 是它一个在 master 分支上的\"拷贝\"提交。",
+              "注意，提交记录 C3 仍然存在（阴影的那货就是你了，还看什么看），而我们已经将 C3 复制到了master。",
               "",
-              "现在还有唯一一个问题就是 master 分支还没有更新……下面就来更新它吧"
+              "现在唯一的问题是 master 分支还没有更新……下面就来更新它吧"
             ],
             "beforeCommand": "git commit; git checkout -b bugFix C1; git commit"
           }
@@ -17896,11 +18479,11 @@ require.define("/levels/intro/4.js",function(require,module,exports,__dirname,__
           "type": "GitDemonstrationView",
           "options": {
             "beforeMarkdowns": [
-              "现在我们可以切换到了 `master` 分支。接下来就把它衍合到 `bugFix` 吧……"
+              "现在，切换到 `master` 分支。接下来就把它 rebase 到 `bugFix` 吧……"
             ],
             "command": "git rebase bugFix",
             "afterMarkdowns": [
-              "看！因为 `master` 是 `bugFix` 的上游，所以 git 只把 `master` 分支的记录前进到 `bugFix` 上。"
+              "完成！因为 `master` 是 `bugFix` 的下游，所以 git 只把 `master` 分支的记录前移到 `bugFix` 上。"
             ],
             "beforeCommand": "git commit; git checkout -b bugFix C1; git commit; git rebase master; git checkout master"
           }
@@ -17909,12 +18492,12 @@ require.define("/levels/intro/4.js",function(require,module,exports,__dirname,__
           "type": "ModalAlert",
           "options": {
             "markdowns": [
-              "想刷过这关，要按照下面的步骤来：",
+              "想完成此关，执行以下操作：",
               "",
-              "* 切换到一个叫 `bugFix` 的新分支",
-              "* 创建一个提交",
-              "* 回到 master 分支并且创建另外一个提交",
-              "* 再次切换到 bugFix 分支，然后把它衍合到 master 上",
+              "* 新建`bugFix`分支",
+              "* 提交一次",
+              "* 切换回 master 分支再提交一次",
+              "* 再次切换到 bugFix 分支，rebase 到 master 上",
               "",
               "祝你好运啦！"
             ]
@@ -17994,15 +18577,17 @@ require.define("/levels/intro/4.js",function(require,module,exports,__dirname,__
 
 });
 
-require.define("/levels/rampup/1.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/levels/rampup/detachedHead.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C2\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C4\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C3\"],\"id\":\"C4\"}},\"HEAD\":{\"target\":\"C4\",\"id\":\"HEAD\"}}",
   "solutionCommand": "git checkout C4",
   "startTree": "{\"branches\":{\"master\":{\"target\":\"C2\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C4\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C3\"],\"id\":\"C4\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
   "name": {
-    "en_US": "Detach yo' HEAD"
+    "en_US": "Detach yo' HEAD",
+    "zh_CN": "分离HEAD"
   },
   "hint": {
-    "en_US": "Use the label (hash) on the commit for help!"
+    "en_US": "Use the label (hash) on the commit for help!",
+    "zh_CN": "使用提交记录上的标签(hash)来求助！"
   },
   "startDialog": {
     "en_US": {
@@ -18030,11 +18615,11 @@ require.define("/levels/rampup/1.js",function(require,module,exports,__dirname,_
             "markdowns": [
               "## HEAD",
               "",
-              "First we have to talk about \"HEAD.\" HEAD is the symbolic name for the currently checked out commit -- it's essentially what commit you're working on top of.",
+              "First we have to talk about \"HEAD\". HEAD is the symbolic name for the currently checked out commit -- it's essentially what commit you're working on top of.",
               "",
-              "The working directory will always match the current state of HEAD, so by moving HEAD, you actually change the contents of your directory.",
+              "HEAD always points to the most recent commit which is reflected in the working tree. Most git commands which make changes to the working tree will start by changing HEAD.",
               "",
-              "Normally HEAD points to a branch name (like `bugFix`). When you commit, both bugFix and HEAD move together"
+              "Normally HEAD points to a branch name (like bugFix). When you commit, the status of bugFix is altered and this change is visible through HEAD."
             ]
           }
         },
@@ -18082,20 +18667,101 @@ require.define("/levels/rampup/1.js",function(require,module,exports,__dirname,_
           }
         }
       ]
+    },
+    "zh_CN": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## 在Git中前后移动",
+              "",
+              "在接触Git的更多高级主题之前，我们先学习用不同的方法在代表你的项目的提交记录树上前后移动。",
+              "",
+              "一旦能够熟练地在Git中前进后退，你使用其他git命令的威力也会被放大！",
+              "",
+              "",
+              "",
+              "",
+              ""
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## HEAD",
+              "",
+              "我们首先看一下\"HEAD\". HEAD是当前提交记录的符号名称 -- 其实就是你正在其基础进行工作的提交记录。",
+              "",
+              "HEAD总是指向最近一次提交记录，表现为当前工作树。大多数修改工作树的git命令都开始于改变HEAD指向。",
+              "",
+              "HEAD通常指向分支名（比如bugFix）。你提交时，改变了bugFix的状态，这一变化通过HEAD变得可见。"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "在实例中看一下。我们将会观察提交前后HEAD的位置。"
+            ],
+            "afterMarkdowns": [
+              "看! HEAD一直藏在`master`分支后面。"
+            ],
+            "command": "git checkout C1; git checkout master; git commit; git checkout C2",
+            "beforeCommand": ""
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "### 分离 HEAD",
+              "",
+              "分离HEAD就是让其指向一个提交记录而不是分支名。这是命令执行之前的样子： ",
+              "",
+              "HEAD -> master -> C1",
+              ""
+            ],
+            "afterMarkdowns": [
+              "现在变成了",
+              "",
+              "HEAD -> C1"
+            ],
+            "command": "git checkout C1",
+            "beforeCommand": ""
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "想完成此关，从`bugFix`分离出HEAD并让其指向一个提交记录。",
+              "",
+              "通过hash值指定提交记录。每个提交记录的hash值显示在代表提交记录的圆圈中。"
+            ]
+          }
+        }
+      ]
     }
   }
 };
+
 });
 
-require.define("/levels/rampup/2.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/levels/rampup/relativeRefs.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C2\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C4\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C3\"],\"id\":\"C4\"}},\"HEAD\":{\"target\":\"C3\",\"id\":\"HEAD\"}}",
   "solutionCommand": "git checkout bugFix^",
   "startTree": "{\"branches\":{\"master\":{\"target\":\"C2\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C4\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C3\"],\"id\":\"C4\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
   "name": {
-    "en_US": "Everything is Relative"
+    "en_US": "Relative Refs (^)",
+    "zh_CN": "相对引用(^)"
   },
   "hint": {
-    "en_US": "Remember the Caret (^) operator!"
+    "en_US": "Remember the Caret (^) operator!",
+    "zh_CN": "记住插入(^)操作符!"
   },
   "startDialog": {
     "en_US": {
@@ -18172,20 +18838,98 @@ require.define("/levels/rampup/2.js",function(require,module,exports,__dirname,_
           }
         }
       ]
+    },
+    "zh_CN": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## 相对引用",
+              "",
+              "用指定提交记录hash值的方式在Git中移动会变得比较乏味。在现实中，你不会有漂亮的可视化的提交记录树放在终端旁边，所以你不得不用`git log`来查看hasn值。",
+              "",
+              "另外，hash值在真实的Git环境中也会更长。举个例子，前一关的介绍中的提交记录的hash值是`fed2da64c0efc5293610bdd892f82a58e8cbc5d8`。不要把舌头闪了...",
+              "",
+              "好的一面是，Git对hash的处理很智能。你只需要提供能够唯一标识提交记录的前几个字符即可。所以，我可以仅输入`fed2`而不是上面的一长串字符。"
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "我说过，通过hash指定提交记录不是很方便，所以Git引入了相对引用。这个就很牛掰了!",
+              "",
+              "使用相对引用，你可以从一个易于记忆的地方（比如分支名`bugFix`或`HEAD`）开始工作。",
+              "",
+              "相对引用非常给力，这里我介绍两个简单的用法：",
+              "",
+              "* 使用`^`向上移动1个提交记录",
+              "* 使用`~<num>`向上移动多个提交记录"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "首先看看插入(^)操作符。把插入符跟在引用名后面，表示让Git寻找指定提交记录的父提交。",
+              "",
+              "所以`master^`相当于\"`master`的父提交\"。",
+              "",
+              "`master^^`是`master`的父父提交（上上代祖先）",
+              "",
+              "切换到master的父提交"
+            ],
+            "afterMarkdowns": [
+              "唰！搞定。这种方式比输入提交记录的hash值简单多了！"
+            ],
+            "command": "git checkout master^",
+            "beforeCommand": "git commit"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "你也可以`HEAD`把用作相对引用。以下命令使用`HEAD`在提交树中向上移动几次。"
+            ],
+            "afterMarkdowns": [
+              "简单！我们可以一直使用`HEAD^`向上移动。"
+            ],
+            "command": "git checkout C3; git checkout HEAD^; git checkout HEAD^; git checkout HEAD^",
+            "beforeCommand": "git commit; git commit"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "要完成此关，切换到`bugFix`的父提交。这会分离出`HEAD`.",
+              "",
+              "如果你愿意的话，使用hash值也可以过关，但为何不试试使用相对引用呢？"
+            ]
+          }
+        }
+      ]
     }
   }
 };
+
 });
 
-require.define("/levels/rampup/3.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/levels/rampup/relativeRefs2.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C6\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C0\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C2\"],\"id\":\"C4\"},\"C5\":{\"parents\":[\"C3\"],\"id\":\"C5\"},\"C6\":{\"parents\":[\"C5\"],\"id\":\"C6\"}},\"HEAD\":{\"target\":\"C1\",\"id\":\"HEAD\"}}",
   "solutionCommand": "git branch -f master C6;git checkout HEAD~1;git branch -f bugFix HEAD~1",
   "startTree": "{\"branches\":{\"master\":{\"target\":\"C4\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C5\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C2\"],\"id\":\"C4\"},\"C5\":{\"parents\":[\"C3\"],\"id\":\"C5\"},\"C6\":{\"parents\":[\"C5\"],\"id\":\"C6\"}},\"HEAD\":{\"target\":\"C2\",\"id\":\"HEAD\"}}",
   "hint": {
-    "en_US": "You'll need to use at least one direct reference (hash) to complete this level"
+    "en_US": "You'll need to use at least one direct reference (hash) to complete this level",
+    "zh_CN": "这一关至少要用到一次直接引用(hash)"
   },
   "name": {
-    "en_US": "Flex your force with -f"
+    "en_US": "Relative Refs #2 (~)",
+    "zh_CN": "相对引用2(~)"
   },
   "startDialog": {
     "en_US": {
@@ -18241,26 +18985,84 @@ require.define("/levels/rampup/3.js",function(require,module,exports,__dirname,_
           }
         }
       ]
+    },
+    "zh_CN": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "### The \"~\" operator",
+              "",
+              "假设需要在提交树中向上移动很多步。使用多个`^`非常无聊，所以Git也引入了波浪(~)操作符。",
+              "",
+              "",
+              "波浪操作符后面可以（可选地）跟一个数字，指定向上移动多少次。看个例子"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "使用`~`一次后退多步."
+            ],
+            "afterMarkdowns": [
+              "唰！如此简洁--相对引用就是好啊！"
+            ],
+            "command": "git checkout HEAD~4",
+            "beforeCommand": "git commit; git commit; git commit"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "### Branch forcing",
+              "",
+              "你现在是相对引用的高手了，现在*用*他来实际做点事情。",
+              "",
+              "我使用相对引用最多的就是移动分支。你可以使用`-f`选项把直接让分支指向另一个提交亡灵。举个例子:",
+              "",
+              "`git branch -f master HEAD~3`",
+              "",
+              "（强制）移动master指向HEAD的第3级父提交。"
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "要完成此关，移动`HEAD`，`master`和`bugFix`到目标所示的位置。"
+            ]
+          }
+        }
+      ]
     }
   }
 };
+
 });
 
-require.define("/levels/rampup/4.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/levels/rampup/reversingChanges.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "goalTreeString": "%7B%22branches%22%3A%7B%22master%22%3A%7B%22target%22%3A%22C1%22%2C%22id%22%3A%22master%22%7D%2C%22pushed%22%3A%7B%22target%22%3A%22C2%27%22%2C%22id%22%3A%22pushed%22%7D%2C%22local%22%3A%7B%22target%22%3A%22C1%22%2C%22id%22%3A%22local%22%7D%7D%2C%22commits%22%3A%7B%22C0%22%3A%7B%22parents%22%3A%5B%5D%2C%22id%22%3A%22C0%22%2C%22rootCommit%22%3Atrue%7D%2C%22C1%22%3A%7B%22parents%22%3A%5B%22C0%22%5D%2C%22id%22%3A%22C1%22%7D%2C%22C2%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C2%22%7D%2C%22C3%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C3%22%7D%2C%22C2%27%22%3A%7B%22parents%22%3A%5B%22C2%22%5D%2C%22id%22%3A%22C2%27%22%7D%7D%2C%22HEAD%22%3A%7B%22target%22%3A%22pushed%22%2C%22id%22%3A%22HEAD%22%7D%7D",
   "solutionCommand": "git reset HEAD~1;git checkout pushed;git revert HEAD",
+  "compareOnlyBranches": true,
   "startTree": "{\"branches\":{\"master\":{\"target\":\"C1\",\"id\":\"master\"},\"pushed\":{\"target\":\"C2\",\"id\":\"pushed\"},\"local\":{\"target\":\"C3\",\"id\":\"local\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"}},\"HEAD\":{\"target\":\"local\",\"id\":\"HEAD\"}}",
   "name": {
     "en_US": "Reversing Changes in Git",
+    "ja": "変更を元に戻す",
     "fr_FR": "Annuler des changements avec Git",
     "ko": "Git에서 작업 되돌리기",
-    "zh_CN": "Git 里的撤销改变"
+    "zh_CN": "在Git中撤销更改"
   },
   "hint": {
     "en_US": "Notice that revert and reset take different arguments.",
     "fr_FR": "",
-    "zh_CN": "",
-    "ko": ""
+    "zh_CN": "注意revert和reset使用不同的参数。",
+    "ko": "",
+    "ja": ""
   },
   "startDialog": {
     "en_US": {
@@ -18321,6 +19123,69 @@ require.define("/levels/rampup/4.js",function(require,module,exports,__dirname,_
               "To complete this level, reverse the two most recent commits on both `local` and `pushed`.",
               "",
               "Keep in mind that `pushed` is a remote branch and `local` is a local branch -- that should help you choose your methods."
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## 変更を元に戻す",
+              "",
+              "Gitでは変更を元に戻す方法がたくさんあります。コミットと同じように、低レベルな動作（ファイル別だったりファイルの中の一部だったり）も高レベルな動作（変更のまとまりのキャンセル）もできます。このアプリケーションでは後者の方法について紹介します。",
+              "",
+              "基本的なアンドゥの方法が2つあります - 一つは`git reset`を使う方法で、もう1つは`git revert`を使う方法です。次のダイアログで一つ一つを見ていきます。",
+              ""
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "## Git Reset",
+              "",
+              "`git reset`はブランチのポインタを後方に移動することで変更のキャンセルを実現します。履歴を上書きするような動作だと思うと良いでしょうか：`git reset`はそもそも前のコミットなんかなかったかのように、ブランチのポインタを元に戻してくれます。",
+              "",
+              "どういう感じか見てみましょう。"
+            ],
+            "afterMarkdowns": [
+              "いいですね！Gitは単純にmasterブランチへのポインタを`C1`へ戻しました。これでこのローカルリポジトリにはまるで`C2`なんて無かったかのように変更をキャンセルできました。"
+            ],
+            "command": "git reset HEAD~1",
+            "beforeCommand": "git commit"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "## Git Revert",
+              "",
+              "自分のマシン上のブランチではさっきの`git reset`でうまくいきましたが、この「履歴を上書きする」手段は、他の人も使っているリモートにあるリポジトリに対しては使うことができません。",
+              "",
+              "変更を巻き戻して他の人とそれを共有するためには、`git revert`を使う必要があります。今度はこれを見てみましょう。"
+            ],
+            "afterMarkdowns": [
+              "あれ、おかしいな。巻き戻したいと思ってたコミットの下に新しいコミットが出来上がってしまったみたいです。なぜか。これは、この新しい`C2'`コミットは`C2`へ戻すのに必要な内容を確かに変更して巻き戻していたのです。",
+              "",
+              "こんな風にして、巻き戻した内容を他人と共有するためにはrevertを使います。"
+            ],
+            "command": "git revert HEAD",
+            "beforeCommand": "git commit"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "この章の仕上げに、`local`と`pushed`の両方の直近のコミットを巻き戻してみましょう。",
+              "",
+              "`pushed`はリモートのブランチで、`local`はローカルであることに注意。正しくコマンドを使い分けましょう。"
             ]
           }
         }
@@ -18397,9 +19262,9 @@ require.define("/levels/rampup/4.js",function(require,module,exports,__dirname,_
             "markdowns": [
               "## 撤销 Git 里面的变动",
               "",
-              "在 Git 里有很多方法撤销（reverse）变动。和 commit 一样，在 Git 里撤销变动同时具有底层次的部分（暂存一些独立的文件或者片段）和高层次的部分（具体到变动是究竟怎么被撤销的）。我们这个应用主要关注后者。",
+              "在 Git 里撤销修改的方法很多。和 commit 一样，在 Git 里撤销变动同时具有底层部分（暂存一些独立的文件或者片段）和高层部分（具体到变动是究竟怎么被撤销的）。我们这个应用主要关注后者。",
               "",
-              "在 Git 里主要有两种方法来撤销变动 —— 一种是 `git reset`，另外一种是 `git revert`。让我们在下一个窗口逐一了解它们。",
+              "在 Git 里主要用两种方法来撤销变动 —— 一种是 `git reset`，另外一种是 `git revert`。让我们在下一个窗口逐一了解它们。",
               ""
             ]
           }
@@ -18410,13 +19275,13 @@ require.define("/levels/rampup/4.js",function(require,module,exports,__dirname,_
             "beforeMarkdowns": [
               "## Git Reset",
               "",
-              "`git reset` 通过把分支记录回退上一个提交来实现撤销改动。这意味着你可以把它的行为当作是\"重写历史\"。`git reset` 会令分支记录回退，做到最新的提交好像没有提交过一样。",
+              "`git reset`把分支记录回退到上一个提交记录来实现撤销改动。你可以认为这是在\"重写历史\"。`git reset`往回移动分支，原来指向的提交记录好像重来没有提交过一样。",
               "",
               "让我们看看具体的操作："
             ],
             "command": "git reset HEAD~1",
             "afterMarkdowns": [
-              "Nice! Git 就简单地把 master 分支的记录移回 `C1`；现在我们的本地仓库就处于好像提交 `C2` 没有发生过的状态了。"
+              "Nice!Git把master分支的指向简单地移回到`C1`；现在我们的本地代码库处于没有提交过`C2`的状态了。"
             ],
             "beforeCommand": "git commit"
           }
@@ -18427,15 +19292,15 @@ require.define("/levels/rampup/4.js",function(require,module,exports,__dirname,_
             "beforeMarkdowns": [
               "## Git Revert",
               "",
-              "虽然在你机子的本地环境中这样来撤销变更看起来很方便，但是这种“改写历史”的方法对别人用的远端分支是无效的哦！",
+              "虽然在你的本地分支中使用`git reset`很方便，但是这种“改写历史”的方法对别人的远端分支是无效的哦！",
               "",
-              "为了撤销分支并把这些变动*分享*给别人，我们需要 `git revert`。下面继续看它是怎么运作的。"
+              "为了撤销更改并*传播*给别人，我们需要使用`git revert`。举个例子"
             ],
             "command": "git revert HEAD",
             "afterMarkdowns": [
-              "怪哉！在我们要撤销的提交之后居然多了一个新提交！这是因为这个新提交 `C2'` 提供了*变动*（introduces changes） —— 刚好是用来撤销 `C2` 这个提交的。",
+              "怪哉！在我们要撤销的提交记录后面居然多了一个新提交！这是因为新提交记录`C2'`引入了*更改*——刚好是用来撤销 `C2` 这个提交的。",
               "",
-              "借助 revert，现在你可以把你的改动分享给别人啦。"
+              "借助 revert，现在可以把你的更改传递给别人啦。"
             ],
             "beforeCommand": "git commit"
           }
@@ -18444,9 +19309,9 @@ require.define("/levels/rampup/4.js",function(require,module,exports,__dirname,_
           "type": "ModalAlert",
           "options": {
             "markdowns": [
-              "要刷过这关，请分别把 `local` 分支和 `pushed` 分支上最近的一个提交撤销掉。",
+              "要完成此关，分别撤销`local`分支和`pushed`分支上的最近一次提交。",
               "",
-              "记住 `pushes` 是一个远程分支，`local` 是一个本地分支 —— 有了这么明显的提示应该知道用哪种方法了吧？"
+              "记住 `pushed` 是一个远程分支，`local` 是一个本地分支 —— 有了这么明显的提示应该知道用哪种方法了吧？"
             ]
           }
         }
@@ -18520,7 +19385,7 @@ require.define("/levels/rampup/4.js",function(require,module,exports,__dirname,_
 
 });
 
-require.define("/levels/rebase/1.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/levels/rebase/manyRebases.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "compareOnlyMasterHashAgnostic": true,
   "disabledMap": {
     "git revert": true
@@ -18529,14 +19394,16 @@ require.define("/levels/rebase/1.js",function(require,module,exports,__dirname,_
   "solutionCommand": "git checkout bugFix;git rebase master;git checkout side;git rebase bugFix;git checkout another;git rebase side;git rebase another master",
   "startTree": "{\"branches\":{\"master\":{\"target\":\"C2\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C3\",\"id\":\"bugFix\"},\"side\":{\"target\":\"C6\",\"id\":\"side\"},\"another\":{\"target\":\"C7\",\"id\":\"another\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C0\"],\"id\":\"C4\"},\"C5\":{\"parents\":[\"C4\"],\"id\":\"C5\"},\"C6\":{\"parents\":[\"C5\"],\"id\":\"C6\"},\"C7\":{\"parents\":[\"C5\"],\"id\":\"C7\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
   "name": {
-    "ko": "9천번이 넘는 리베이스",
     "en_US": "Rebasing over 9000 times",
-    "zh_CN": "衍合一百遍啊一百遍"
+    "ko": "9천번이 넘는 리베이스",
+    "ja": "Rebasing over 9000 times",
+    "zh_CN": "N次Rebase"
   },
   "hint": {
     "en_US": "Remember, the most efficient way might be to only update master at the end...",
+    "ja": "最も効率的なやり方はmasterを最後に更新するだけかもしれない・・・",
     "ko": "아마도 master를 마지막에 업데이트하는 것이 가장 효율적인 방법일 것입니다...",
-    "zh_CN": "记住，可能最终最高效的方法就是更新主分支（master）……"
+    "zh_CN": "记住，最后更新master分支可能是最高效的方法。"
   },
   "startDialog": {
     "en_US": {
@@ -18557,6 +19424,24 @@ require.define("/levels/rebase/1.js",function(require,module,exports,__dirname,_
         }
       ]
     },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "### 複数のブランチをリベースする",
+              "",
+              "さあ、いくつものブランチが出てきます。このブランチたち全てをmasterブランチにリベースしましょう。",
+              "",
+              "おエライさん方が今回の仕事を少しトリッキーにしてくれました ― コミットはすべて一列のシーケンシャルな状態にしてほしいそうです。つまり私たちが作るリポジトリの最終的なツリーの状態は、`C7'`が最後に来て、`C6'`がその一つ上に来て、、と順に積み重なるイメージです。",
+              "",
+              "試行錯誤してツリーが汚くなってきたら、`reset`コマンドを使ってツリーの状態を初期化してください。模範解答をチェックして、それよりも簡単なコマンドで済ませられるかどうか、を考えるのも忘れずに！"
+            ]
+          }
+        }
+      ]
+    },
     "zh_CN": {
       "childViews": [
         {
@@ -18565,11 +19450,11 @@ require.define("/levels/rebase/1.js",function(require,module,exports,__dirname,_
             "markdowns": [
               "### 多分支衍合",
               "",
-              "呐，现在我们有很多分支啦！让我们把这些分支的工作衍合到 master 分支上吧。",
+              "呐，现在我们有很多分支啦！让我们rebase这些分支的工作到 master 分支上吧。",
               "",
-              "但是上头（upper management）找了点麻烦 —— 他们要希望提交历史是有序的，也就是我们最终的结果是 `C7'` 在最底部，`C6'` 在它上面，以此类推。",
+              "但是你的头头找了点麻烦 —— 他们希望得到有序的提交历史，也就是我们最终的结果是 `C7'` 在最底部，`C6'` 在它上面，以此类推。",
               "",
-              "假如你搞砸了，没所谓的（虽然我不会告诉你用 `reset` 可以重新开始）。记得最后要看看我们的答案，并和你的对比下，看谁敲的命令更少哦！"
+              "假如你搞砸了，没所谓的（虽然我不会告诉你用 `reset` 可以重新开始）。记得看看我们提供的答案，看你能否使用更少的命令完成任务！"
             ]
           }
         }
@@ -18595,93 +19480,10 @@ require.define("/levels/rebase/1.js",function(require,module,exports,__dirname,_
     }
   }
 };
-});
-
-require.define("/levels/rebase/2.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
-  "compareAllBranchesHashAgnostic": true,
-  "disabledMap": {
-    "git revert": true
-  },
-  "goalTreeString": "%7B%22branches%22%3A%7B%22master%22%3A%7B%22target%22%3A%22C5%22%2C%22id%22%3A%22master%22%7D%2C%22one%22%3A%7B%22target%22%3A%22C2%27%22%2C%22id%22%3A%22one%22%7D%2C%22two%22%3A%7B%22target%22%3A%22C2%27%27%22%2C%22id%22%3A%22two%22%7D%2C%22three%22%3A%7B%22target%22%3A%22C2%22%2C%22id%22%3A%22three%22%7D%7D%2C%22commits%22%3A%7B%22C0%22%3A%7B%22parents%22%3A%5B%5D%2C%22id%22%3A%22C0%22%2C%22rootCommit%22%3Atrue%7D%2C%22C1%22%3A%7B%22parents%22%3A%5B%22C0%22%5D%2C%22id%22%3A%22C1%22%7D%2C%22C2%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C2%22%7D%2C%22C3%22%3A%7B%22parents%22%3A%5B%22C2%22%5D%2C%22id%22%3A%22C3%22%7D%2C%22C4%22%3A%7B%22parents%22%3A%5B%22C3%22%5D%2C%22id%22%3A%22C4%22%7D%2C%22C5%22%3A%7B%22parents%22%3A%5B%22C4%22%5D%2C%22id%22%3A%22C5%22%7D%2C%22C4%27%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C4%27%22%7D%2C%22C3%27%22%3A%7B%22parents%22%3A%5B%22C4%27%22%5D%2C%22id%22%3A%22C3%27%22%7D%2C%22C2%27%22%3A%7B%22parents%22%3A%5B%22C3%27%22%5D%2C%22id%22%3A%22C2%27%22%7D%2C%22C5%27%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C5%27%22%7D%2C%22C4%27%27%22%3A%7B%22parents%22%3A%5B%22C5%27%22%5D%2C%22id%22%3A%22C4%27%27%22%7D%2C%22C3%27%27%22%3A%7B%22parents%22%3A%5B%22C4%27%27%22%5D%2C%22id%22%3A%22C3%27%27%22%7D%2C%22C2%27%27%22%3A%7B%22parents%22%3A%5B%22C3%27%27%22%5D%2C%22id%22%3A%22C2%27%27%22%7D%7D%2C%22HEAD%22%3A%7B%22target%22%3A%22two%22%2C%22id%22%3A%22HEAD%22%7D%7D",
-  "solutionCommand": "git checkout one; git cherry-pick C4 C3 C2; git checkout two; git cherry-pick C5 C4 C3 C2; git branch -f three C2",
-  "startTree": "{\"branches\":{\"master\":{\"target\":\"C5\",\"id\":\"master\"},\"one\":{\"target\":\"C1\",\"id\":\"one\"},\"two\":{\"target\":\"C1\",\"id\":\"two\"},\"three\":{\"target\":\"C1\",\"id\":\"three\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C2\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C3\"],\"id\":\"C4\"},\"C5\":{\"parents\":[\"C4\"],\"id\":\"C5\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
-  "name": {
-    "ko": "브랜치 스파게티",
-    "en_US": "Branch Spaghetti",
-    "zh_CN": "分支浆糊"
-  },
-  "hint": {
-    "en_US": "Make sure to do everything in the proper order! Branch one first, then two, then three",
-    "ko": "이 문제를 해결하는 방법은 여러가지가 있습니다! 체리픽(cherry-pick)이 가장 쉽지만 오래걸리는 방법이고, 리베이스(rebase -i)가 빠른 방법입니다",
-    "zh_CN": "确保你是按照正确的顺序来操作！先操作分支 `one`, 然后 `two`, 最后才是 `three`"
-  },
-  "startDialog": {
-    "en_US": {
-      "childViews": [
-        {
-          "type": "ModalAlert",
-          "options": {
-            "markdowns": [
-              "## Branch Spaghetti",
-              "",
-              "WOAHHHhhh Nelly! We have quite the goal to reach in this level.",
-              "",
-              "Here we have `master` that is a few commits ahead of branches `one` `two` and `three`. For whatever reason, we need to update these three other branches with modified versions of the last few commits on master.",
-              "",
-              "Branch `one` needs a re-ordering and a deletion of `C5`. `two` needs pure reordering, and `three` only needs one commit!",
-              "",
-              "We will let you figure out how to solve this one -- make sure to check out our solution afterwards with `show solution`. "
-            ]
-          }
-        }
-      ]
-    },
-    "zh_CN": {
-      "childViews": [
-        {
-          "type": "ModalAlert",
-          "options": {
-            "markdowns": [
-              "## Branch Spaghetti",
-              "",
-              "哇塞大神！这关我们要来点不同的！",
-              "",
-              "现在我们的 `master` 分支是比 `one` `two` 和 `three` 要多几个提交。出于某种原因，我们需要把其他三个分支更新到 master 分支上新近的几个不同提交上。（update these three other brances with modified versions of the last few commits on master）",
-              "",
-              "分支 `one` 需要重新排序和撤销， `two` 需要完全重排，而 `three` 只需要提交一次。",
-              "",
-              "慢慢摸索会找到答案的 —— 你完事记得用 `show solution` 看看我们的答案哦。"
-            ]
-          }
-        }
-      ]
-    },
-    "ko": {
-      "childViews": [
-        {
-          "type": "ModalAlert",
-          "options": {
-            "markdowns": [
-              "## 브랜치 스파게티",
-              "",
-              "음, 이번에는 만만치 않습니다!",
-              "",
-              "여기 `master` 브랜치의 몇 번 이전 커밋에 `one`, `two`,`three` 총 3개의 브랜치가 있습니다. 어떤 이유인지는 몰라도, master의 최근 커밋 몇 개를 나머지 세 개의 브랜치에 반영하려고 합니다.",
-              "",
-              "`one` 브랜치는 순서를 바꾸고 `C5`커밋을 삭제하고, `two`브랜치는 순서만 바꾸며, `three`브랜치는 하나의 커밋만 가져옵시다!",
-              "",
-              "자유롭게 이 문제를 풀어보시고 나서 `show solution`명령어로 모범 답안을 확인해보세요."
-            ]
-          }
-        }
-      ]
-    }
-  }
-};
 
 });
 
-require.define("/levels/mixed/1.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/levels/mixed/grabbingOneCommit.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "compareOnlyMasterHashAgnosticWithAsserts": true,
   "goalAsserts": {
     "master": [
@@ -18699,10 +19501,12 @@ require.define("/levels/mixed/1.js",function(require,module,exports,__dirname,__
   "name": {
     "ko": "딱 한개의 커밋만 가져오기",
     "en_US": "Grabbing Just 1 Commit",
+    "ja": "Grabbing Just 1 Commit",
     "zh_CN": "私藏一个提交"
   },
   "hint": {
     "en_US": "Remember, interactive rebase or cherry-pick is your friend here",
+    "ja": "このレベルではインタラクティブモードのrebaseやcherry-pickがクリアのカギです",
     "ko": "대화식 리베이스(rebase -i)나 or 체리픽(cherry-pick)을 사용하세요",
     "zh_CN": "记住，交互式 rebase 或者 cherry-pick 会很有帮助"
   },
@@ -18743,6 +19547,47 @@ require.define("/levels/mixed/1.js",function(require,module,exports,__dirname,__
           "options": {
             "markdowns": [
               "This is a later level so we will leave it up to you to decide, but in order to complete the level, make sure `master` receives the commit that `bugFix` references."
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## ローカルに積み上がったコミット",
+              "",
+              "実際の開発ではこういうケースがよくあります：「バグの原因調査を試みているがバグの再現性がかなり低い。調査の補助のために、いくつかのデバッグ用の命令やprint文を差し込んでいる。」",
+              "",
+              "これらのデバッグ用のコードはバグ修正用のブランチにコミットされています。そしてついにバグの原因を突き止めて、修正した！やった！",
+              "",
+              "あとは`bugFix`ブランチを`master`ブランチに統合できればOK。そこで単純に`master`をfast-forwardすればよいかというと、それでは`master`ブランチの中にデバッグ用のコードも混入してしまいます。"
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "ここでGitの魔法が力を発揮します。解決のためにはいくつかの方法がありますが、最も素直な解決方法は2つあって：",
+              "",
+              "* `git rebase -i`",
+              "* `git cherry-pick`",
+              "",
+              "インタラクティブモードの（`-i`オプションつきの）rebaseによって、保持したいコミットと破棄したいコミットを選り分けることができます。コミットの順序を変更することも可能です。この方法は、一部の変更をどこかへやってしまいたい時に便利です。",
+              "",
+              "もう一方のcherry-pickを使うと、持っていきたいコミットを選んで`HEAD`の先にストンと落とすことができます。"
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "後半の章ですのでどう解決するかをもう自分で考えることができると思います。このレベルをクリアするためには、`bugFix`が持っているコミットを`master`ブランチが受け取る必要がある点には注意してください。"
             ]
           }
         }
@@ -18835,7 +19680,7 @@ require.define("/levels/mixed/1.js",function(require,module,exports,__dirname,__
 
 });
 
-require.define("/levels/mixed/2.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/levels/mixed/jugglingCommits.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "disabledMap": {
     "git cherry-pick": true,
     "git revert": true
@@ -18857,10 +19702,12 @@ require.define("/levels/mixed/2.js",function(require,module,exports,__dirname,__
   "name": {
     "ko": "커밋들 갖고 놀기",
     "en_US": "Juggling Commits",
+    "ja": "Juggling Commits",
     "zh_CN": "提交变换戏法"
   },
   "hint": {
     "en_US": "The first command is git rebase -i HEAD~2",
+    "ja": "最初に打つコマンドはgit rebase -i HEAD~2",
     "ko": "첫번째 명령은 git rebase -i HEAD~2 입니다",
     "zh_CN": "第一个命令是 'git rebase -i HEAD~2'"
   },
@@ -18901,6 +19748,45 @@ require.define("/levels/mixed/2.js",function(require,module,exports,__dirname,__
               "Lastly, pay attention to the goal state here -- since we move the commits twice, they both get an apostrophe appended. One more apostrophe is added for the commit we amend, which gives us the final form of the tree ",
               "",
               "That being said, I can compare levels now based on structure and relative apostrophe differences. As long as your tree's `master` branch has the same structure and relative apostrophe differences, I'll give full credit"
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Commitsをやりくりする",
+              "",
+              "開発中に頻繁に起こるケースをもう1つ考えます。ある変更（`newImage`）とまた別の変更（`caption`）があって、それらに依存関係があるとします。この一連の変更が一列に積み重なっているとします。",
+              "",
+              "ここでトリッキーなのは、以前のコミットに対して微修正をかけなければならないケースがあるということです。今回の教材でも、過去のコミットであるにも関わらず`newImage`ブランチに僅かな修正を加えるような設計の修正が入ったとしましょう。"
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "この困難な状況を、以下の手順で克服することを考えます：",
+              "",
+              "* `git rebase -i`を使って順番を変更する。これで、変更をかけたいコミットを一番先頭に持ってくる。",
+              "* `commit --amend`コマンドで僅かな変更を行う",
+              "* `git rebase -i`コマンドを再度使って、先頭に持ってきていたコミットを元に戻す",
+              "* 最後に、レベルクリアのためにmasterブランチを先頭に持ってくる",
+              "",
+              "クリアのための方法はいくつもありますが（cherry-pickを使うこともできます）、別の回答はまた後程の章で見ることにんして、今回は上記の方法でやってみることにしましょう。"
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "最後に、ゴール時点での状態に気を付けてください。今回2回ほどコミットを動かしますから、コミットへのポインタにはアポストロフィ（'）が追加されます。commit --amendコマンドの実行でできたコミットには更にもう1つのアポストロフィが追加されます。 "
             ]
           }
         }
@@ -18989,7 +19875,7 @@ require.define("/levels/mixed/2.js",function(require,module,exports,__dirname,__
 
 });
 
-require.define("/levels/mixed/3.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/levels/mixed/jugglingCommits2.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "goalTreeString": "%7B%22branches%22%3A%7B%22master%22%3A%7B%22target%22%3A%22C3%27%22%2C%22id%22%3A%22master%22%7D%2C%22newImage%22%3A%7B%22target%22%3A%22C2%22%2C%22id%22%3A%22newImage%22%7D%2C%22caption%22%3A%7B%22target%22%3A%22C3%22%2C%22id%22%3A%22caption%22%7D%7D%2C%22commits%22%3A%7B%22C0%22%3A%7B%22parents%22%3A%5B%5D%2C%22id%22%3A%22C0%22%2C%22rootCommit%22%3Atrue%7D%2C%22C1%22%3A%7B%22parents%22%3A%5B%22C0%22%5D%2C%22id%22%3A%22C1%22%7D%2C%22C2%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C2%22%7D%2C%22C3%22%3A%7B%22parents%22%3A%5B%22C2%22%5D%2C%22id%22%3A%22C3%22%7D%2C%22C2%27%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C2%27%22%7D%2C%22C2%27%27%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C2%27%27%22%7D%2C%22C3%27%22%3A%7B%22parents%22%3A%5B%22C2%27%27%22%5D%2C%22id%22%3A%22C3%27%22%7D%7D%2C%22HEAD%22%3A%7B%22target%22%3A%22master%22%2C%22id%22%3A%22HEAD%22%7D%7D",
   "solutionCommand": "git checkout master;git cherry-pick C2;git commit --amend;git cherry-pick C3",
   "disabledMap": {
@@ -19010,10 +19896,12 @@ require.define("/levels/mixed/3.js",function(require,module,exports,__dirname,__
   "name": {
     "ko": "커밋 갖고 놀기 #2",
     "en_US": "Juggling Commits #2",
+    "ja": "コミットをやりくりする その2",
     "zh_CN": "提交交换戏法 #2"
   },
   "hint": {
     "en_US": "Don't forget to forward master to the updated changes!",
+    "ja": "masterのポインタを先に進めることを忘れずに！",
     "ko": "master를 변경 완료한 커밋으로 이동(forward)시키는 것을 잊지 마세요!",
     "zh_CN": "别忘记了将 master 快进到最新的更新上！"
   },
@@ -19056,6 +19944,47 @@ require.define("/levels/mixed/3.js",function(require,module,exports,__dirname,__
               "So in this level, let's accomplish the same objective of amending `C2` once but avoid using `rebase -i`. I'll leave it up to you to figure it out! :D",
               "",
               "Remember, the exact number of apostrophe's (') on the commit are not important, only the relative differences. For example, I will give credit to a tree that matches the goal tree but has one extra apostrophe everywhere"
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## コミットをやりくりする その2",
+              "",
+              "*注意 この一つ前のレベル「コミットをやりくりする」をクリアしていない人は、まずそちらの問題をクリアしてきてください*",
+              "",
+              "前回見てきたように、コミット順序の変更のために、私たちは`rebase -i`コマンドを利用しました。ツリーの先頭に変更対象のコミットがあれば、--amendオプションを使うことで容易に変更を書きかえて、元の順序に戻すことができます。",
+              "",
+              "この場合に心配なことが一つだけあって、それは複数回の順序の変更が行われるので、rebaseのコンフリクト（衝突）が起こりうることです。こういうケースへの対策として、`git cherry-pick`を使った別の解決法について考えてみましょう。"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "git cherry-pickを使うと、ツリーの中から複数のコミットを選んで、HEADの下に新しく作ることができましたね。",
+              "",
+              "簡単なデモを見てみましょう："
+            ],
+            "afterMarkdowns": [
+              "できました！次へ進みましょう"
+            ],
+            "command": "git cherry-pick C2",
+            "beforeCommand": "git checkout -b bugFix; git commit; git checkout master; git commit"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "このレベルでは、`C2`をamendすることで前回と同じ目的を達成しましょう。但し`rebase -i`は使わずにクリアしてください。どんな方法で進めるかはあなたにおまかせします！:D"
             ]
           }
         }
@@ -19147,6 +20076,304 @@ require.define("/levels/mixed/3.js",function(require,module,exports,__dirname,__
 };
 });
 
+require.define("/levels/advanced/multipleParents.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+  "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C7\",\"id\":\"master\"},\"bugWork\":{\"target\":\"C2\",\"id\":\"bugWork\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C3\"],\"id\":\"C4\"},\"C5\":{\"parents\":[\"C2\"],\"id\":\"C5\"},\"C6\":{\"parents\":[\"C4\",\"C5\"],\"id\":\"C6\"},\"C7\":{\"parents\":[\"C6\"],\"id\":\"C7\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
+  "solutionCommand": "git branch bugWork master^^2^",
+  "startTree": "{\"branches\":{\"master\":{\"target\":\"C7\",\"id\":\"master\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C3\"],\"id\":\"C4\"},\"C5\":{\"parents\":[\"C2\"],\"id\":\"C5\"},\"C6\":{\"parents\":[\"C4\",\"C5\"],\"id\":\"C6\"},\"C7\":{\"parents\":[\"C6\"],\"id\":\"C7\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
+  "name": {
+    "en_US": "Multiple parents",
+    "zh_CN": "多个父提交记录"
+  },
+  "hint": {
+    "en_US": "Use `git branch bugWork` with a target commit to create the missing reference.",
+    "zh_CN": "使用`git branch bugWork`加上一个目标提交记录来创建消失的引用。"
+  },
+  "startDialog": {
+    "en_US": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "### Specifying Parents",
+              "",
+              "Like the `~` modifier, the `^` modifier also accepts an optional number after it.",
+              "",
+              "Rather than specifying the number of generations to go back (what `~` takes), the modifier on `^` specifies which parent reference to follow from a merge commit. Remember that merge commits have multiple parents, so the path to choose is ambiguous.",
+              "",
+              "Git will normally follow the \"first\" parent upwards from a merge commit, but specifying a number with `^` changes this default behavior.",
+              "",
+              "Enough talking, let's see it in action.",
+              ""
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "Here we have a merge commit. If we checkout `master^` without the modifier, we will follow the first parent after the merge commit. ",
+              "",
+              "(*In our visuals, the first parent is positioned directly above the merge commit.*)"
+            ],
+            "afterMarkdowns": [
+              "Easy -- this is what we are all used to."
+            ],
+            "command": "git checkout master^",
+            "beforeCommand": "git checkout HEAD^; git commit; git checkout master; git merge C2"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "Now let's try specifying the second parent instead..."
+            ],
+            "afterMarkdowns": [
+              "See? We followed the other parent upwards."
+            ],
+            "command": "git checkout master^2",
+            "beforeCommand": "git checkout HEAD^; git commit; git checkout master; git merge C2"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "The `^` and `~` modifiers can make moving around a commit tree very powerful:"
+            ],
+            "afterMarkdowns": [
+              "Lightning fast!"
+            ],
+            "command": "git checkout HEAD~; git checkout HEAD^2; git checkout HEAD~2",
+            "beforeCommand": "git commit; git checkout C0; git commit; git commit; git commit; git checkout master; git merge C5; git commit"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "Even crazier, these modifiers can be chained together! Check this out:"
+            ],
+            "afterMarkdowns": [
+              "The same movement as before, but all in one command."
+            ],
+            "command": "git checkout HEAD~^2~2",
+            "beforeCommand": "git commit; git checkout C0; git commit; git commit; git commit; git checkout master; git merge C5; git commit"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "### Put it to practice",
+              "",
+              "To complete this level, create a new branch at the specified destination.",
+              "",
+              "Obviously it would be easy to specify the commit directly (with something like `C6`), but I challenge you to use the modifiers we talked about instead!"
+            ]
+          }
+        }
+      ]
+    },
+    "zh_CN": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "### 选择父提交",
+              "",
+              "和`~`修改符一样，`^`修改符之后也可以跟一个（可选的）数字。",
+              "",
+              "这不是用来指定向上返回几代（`~`的作用），`^`后的数字指定跟随合并提交记录的哪一个父提交。还记得一个合并提交有多个父提交吧，所有选择哪条路径不是那么清晰。",
+              "",
+              "Git默认选择跟随合并提交的\"第一个\"父提交，使用`^`后跟一个数字来改变这一默认行为。",
+              "",
+              "废话不多说，举个例子。",
+              ""
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "这里有一个合并提交。如果不加数字修改符直接切换到`master^`，会回到第一个父提交。",
+              "",
+              "(*在我们的图示中，第一个父提交是指合并提交正上方的那个父提交。*)"
+            ],
+            "afterMarkdowns": [
+              "OK--这恰好是我们想要的。"
+            ],
+            "command": "git checkout master^",
+            "beforeCommand": "git checkout HEAD^; git commit; git checkout master; git merge C2"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "现在来试试选择第二个父提交……"
+            ],
+            "afterMarkdowns": [
+              "看见了吧？我们回到了第二个父提交。"
+            ],
+            "command": "git checkout master^2",
+            "beforeCommand": "git checkout HEAD^; git commit; git checkout master; git merge C2"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "使用`^`和`~`可以自由在在提交树中移动："
+            ],
+            "afterMarkdowns": [
+              "快若闪电！"
+            ],
+            "command": "git checkout HEAD~; git checkout HEAD^2; git checkout HEAD~2",
+            "beforeCommand": "git commit; git checkout C0; git commit; git commit; git commit; git checkout master; git merge C5; git commit"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "再疯狂点，这些修改符支持链式操作！试一下这个："
+            ],
+            "afterMarkdowns": [
+              "和前面的结果一样，但只用了一条命令。"
+            ],
+            "command": "git checkout HEAD~^2~2",
+            "beforeCommand": "git commit; git checkout C0; git commit; git commit; git commit; git checkout master; git merge C5; git commit"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "### 实践一下",
+              "",
+              "要完成此关，在指定的目标位置创建一个新的分支。",
+              "",
+              "很明显可以简单的直接使用提交记录的hash值（比如`C6`），但我要求你使用刚刚讲到的相对引用修饰符！"
+            ]
+          }
+        }
+      ]
+    }
+  }
+};
+
+});
+
+require.define("/levels/rebase/selectiveRebase.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+  "compareAllBranchesHashAgnostic": true,
+  "disabledMap": {
+    "git revert": true
+  },
+  "goalTreeString": "%7B%22branches%22%3A%7B%22master%22%3A%7B%22target%22%3A%22C5%22%2C%22id%22%3A%22master%22%7D%2C%22one%22%3A%7B%22target%22%3A%22C2%27%22%2C%22id%22%3A%22one%22%7D%2C%22two%22%3A%7B%22target%22%3A%22C2%27%27%22%2C%22id%22%3A%22two%22%7D%2C%22three%22%3A%7B%22target%22%3A%22C2%22%2C%22id%22%3A%22three%22%7D%7D%2C%22commits%22%3A%7B%22C0%22%3A%7B%22parents%22%3A%5B%5D%2C%22id%22%3A%22C0%22%2C%22rootCommit%22%3Atrue%7D%2C%22C1%22%3A%7B%22parents%22%3A%5B%22C0%22%5D%2C%22id%22%3A%22C1%22%7D%2C%22C2%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C2%22%7D%2C%22C3%22%3A%7B%22parents%22%3A%5B%22C2%22%5D%2C%22id%22%3A%22C3%22%7D%2C%22C4%22%3A%7B%22parents%22%3A%5B%22C3%22%5D%2C%22id%22%3A%22C4%22%7D%2C%22C5%22%3A%7B%22parents%22%3A%5B%22C4%22%5D%2C%22id%22%3A%22C5%22%7D%2C%22C4%27%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C4%27%22%7D%2C%22C3%27%22%3A%7B%22parents%22%3A%5B%22C4%27%22%5D%2C%22id%22%3A%22C3%27%22%7D%2C%22C2%27%22%3A%7B%22parents%22%3A%5B%22C3%27%22%5D%2C%22id%22%3A%22C2%27%22%7D%2C%22C5%27%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C5%27%22%7D%2C%22C4%27%27%22%3A%7B%22parents%22%3A%5B%22C5%27%22%5D%2C%22id%22%3A%22C4%27%27%22%7D%2C%22C3%27%27%22%3A%7B%22parents%22%3A%5B%22C4%27%27%22%5D%2C%22id%22%3A%22C3%27%27%22%7D%2C%22C2%27%27%22%3A%7B%22parents%22%3A%5B%22C3%27%27%22%5D%2C%22id%22%3A%22C2%27%27%22%7D%7D%2C%22HEAD%22%3A%7B%22target%22%3A%22two%22%2C%22id%22%3A%22HEAD%22%7D%7D",
+  "solutionCommand": "git checkout one; git cherry-pick C4 C3 C2; git checkout two; git cherry-pick C5 C4 C3 C2; git branch -f three C2",
+  "startTree": "{\"branches\":{\"master\":{\"target\":\"C5\",\"id\":\"master\"},\"one\":{\"target\":\"C1\",\"id\":\"one\"},\"two\":{\"target\":\"C1\",\"id\":\"two\"},\"three\":{\"target\":\"C1\",\"id\":\"three\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C2\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C3\"],\"id\":\"C4\"},\"C5\":{\"parents\":[\"C4\"],\"id\":\"C5\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
+  "name": {
+    "ko": "브랜치 스파게티",
+    "en_US": "Branch Spaghetti",
+    "ja": "ブランチスパゲッティ",
+    "zh_CN": "分支浆糊"
+  },
+  "hint": {
+    "en_US": "Make sure to do everything in the proper order! Branch one first, then two, then three",
+    "ja": "全て正しい順番で処理すること！oneが最初で、次がtwo、最後にthreeを片付ける。",
+    "ko": "이 문제를 해결하는 방법은 여러가지가 있습니다! 체리픽(cherry-pick)이 가장 쉽지만 오래걸리는 방법이고, 리베이스(rebase -i)가 빠른 방법입니다",
+    "zh_CN": "确保你是按照正确的顺序来操作！先操作分支 `one`, 然后 `two`, 最后才是 `three`"
+  },
+  "startDialog": {
+    "en_US": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Branch Spaghetti",
+              "",
+              "WOAHHHhhh Nelly! We have quite the goal to reach in this level.",
+              "",
+              "Here we have `master` that is a few commits ahead of branches `one` `two` and `three`. For whatever reason, we need to update these three other branches with modified versions of the last few commits on master.",
+              "",
+              "Branch `one` needs a re-ordering and a deletion of `C5`. `two` needs pure reordering, and `three` only needs one commit!",
+              "",
+              "We will let you figure out how to solve this one -- make sure to check out our solution afterwards with `show solution`. "
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## ブランチスパゲッティ",
+              "",
+              "なんということでしょう。今回のレベルクリアのために、やることがたくさんあります。",
+              "",
+              "いま`master`が指しているコミットの数個前のコミットに、ブランチ`one`、`two`それから`three`があります。何か事情があって、これらの3つのブランチをmasterが指している最新の状態に更新したいケースを考えます。",
+              "",
+              "ブランチ`one`に対しては、順序の変更と`C5`の削除が必要です。`two`では順序の変更のみ、`three`に対しては1回だけコミットすればOKです。",
+              "",
+              "`show solution`コマンドで模範解答を確認できますから、こちらも利用してください。 "
+            ]
+          }
+        }
+      ]
+    },
+    "zh_CN": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Branch Spaghetti",
+              "",
+              "哇塞大神！这关我们要来点不同的！",
+              "",
+              "现在我们的 `master` 分支是比 `one` `two` 和 `three` 要多几个提交。出于某种原因，我们需要把其他三个分支更新到 master 分支上新近的几个不同提交上。（update these three other brances with modified versions of the last few commits on master）",
+              "",
+              "分支 `one` 需要重新排序和撤销， `two` 需要完全重排，而 `three` 只需要提交一次。",
+              "",
+              "慢慢摸索会找到答案的 —— 你完事记得用 `show solution` 看看我们的答案哦。"
+            ]
+          }
+        }
+      ]
+    },
+    "ko": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## 브랜치 스파게티",
+              "",
+              "음, 이번에는 만만치 않습니다!",
+              "",
+              "여기 `master` 브랜치의 몇 번 이전 커밋에 `one`, `two`,`three` 총 3개의 브랜치가 있습니다. 어떤 이유인지는 몰라도, master의 최근 커밋 몇 개를 나머지 세 개의 브랜치에 반영하려고 합니다.",
+              "",
+              "`one` 브랜치는 순서를 바꾸고 `C5`커밋을 삭제하고, `two`브랜치는 순서만 바꾸며, `three`브랜치는 하나의 커밋만 가져옵시다!",
+              "",
+              "자유롭게 이 문제를 풀어보시고 나서 `show solution`명령어로 모범 답안을 확인해보세요."
+            ]
+          }
+        }
+      ]
+    }
+  }
+};
+
+});
+
 require.define("/src/js/views/levelDropdownView.js",function(require,module,exports,__dirname,__filename,process,global){var _ = require('underscore');
 var Q = require('q');
 // horrible hack to get localStorage Backbone plugin
@@ -19154,6 +20381,7 @@ var Backbone = (!require('../util').isBrowser()) ? require('backbone') : window.
 
 var util = require('../util');
 var intl = require('../intl');
+var log = require('../log');
 var KeyboardListener = require('../util/keyboard').KeyboardListener;
 var Main = require('../app');
 
@@ -19379,6 +20607,9 @@ var LevelDropdownView = ContainedBase.extend({
         'commandSubmitted',
         'level ' + id
       );
+      var level = Main.getLevelArbiter().getLevel(id);
+      var name = level.name.en_US;
+      log.levelSelected(name);
     }
     this.hide();
   },
@@ -19406,7 +20637,9 @@ var SeriesView = BaseView.extend({
   className: 'seriesView box flex1 vertical',
   template: _.template($('#series-view').html()),
   events: {
-    'click div.levelIcon': 'click'
+    'click div.levelIcon': 'click',
+    'mouseenter div.levelIcon': 'enterIcon',
+    'mouseleave div.levelIcon': 'leaveIcon'
   },
 
   initialize: function(options) {
@@ -19421,9 +20654,11 @@ var SeriesView = BaseView.extend({
     }, this);
 
     this.destination = options.destination;
+    // use a non-breaking space to prevent the level from bouncing around
+    // from missing strings
     this.JSON = {
       displayName: intl.getIntlKey(this.info, 'displayName'),
-      about: intl.getIntlKey(this.info, 'about'),
+      about: intl.getIntlKey(this.info, 'about') || "&nbsp;",
       ids: this.levelIDs
     };
 
@@ -19440,13 +20675,32 @@ var SeriesView = BaseView.extend({
     });
   },
 
-  click: function(ev) {
-    var element = ev.srcElement || ev.currentTarget;
-    if (!element) {
-      console.warn('wut, no id'); return;
-    }
+  getEventID: function(ev) {
+    var element = ev.target;
+    return $(element).attr('data-id');
+  },
 
-    var id = $(element).attr('data-id');
+  resetAbout: function() {
+    this.$('p.about').text(intl.getIntlKey(this.info, 'about'))
+      .css('font-style', 'inherit');
+  },
+
+  setAbout: function(content) {
+    this.$('p.about').text(content).css('font-style', 'italic');
+  },
+
+  enterIcon: function(ev) {
+    var id = this.getEventID(ev);
+    var level = Main.getLevelArbiter().getLevel(id);
+    this.setAbout(intl.getName(level));
+  },
+
+  leaveIcon: function() {
+    this.resetAbout();
+  },
+
+  click: function(ev) {
+    var id = this.getEventID(ev);
     this.navEvents.trigger('clickedID', id);
   }
 });
@@ -19469,6 +20723,7 @@ var Errors = require('../util/errors');
 var Warning = Errors.Warning;
 
 var util = require('../util');
+var log = require('../log');
 var keyboard = require('../util/keyboard');
 
 var CommandPromptView = Backbone.View.extend({
@@ -19532,7 +20787,7 @@ var CommandPromptView = Backbone.View.extend({
   },
 
   onKeyDown: function(e) {
-    var el = e.srcElement || e.currentTarget;
+    var el = e.target;
     this.updatePrompt(el);
   },
 
@@ -19690,6 +20945,7 @@ var CommandPromptView = Backbone.View.extend({
     if (this.commands.length > 100) {
       this.clearLocalStorage();
     }
+    log.commandEntered(value);
   },
 
   submitCommand: function(value) {
@@ -19911,11 +21167,11 @@ require.define("/src/js/dialogs/sandbox.js",function(require,module,exports,__di
         '',
         'If you have not seen the demo, please check it out here:',
         '',
-        '[http://pcottle.github.com/learnGitBranching/?demo](http://pcottle.github.com/learnGitBranching/?demo)',
+        '[http://pcottle.github.io/learnGitBranching/?demo](http://pcottle.github.io/learnGitBranching/?demo)',
         '',
         'Annoyed at this dialog? Append `?NODEMO` to the url to get rid of it, linked below for convenience:',
         '',
-        '[http://pcottle.github.com/learnGitBranching/?NODEMO](http://pcottle.github.com/learnGitBranching/?NODEMO)'
+        '[http://pcottle.github.io/learnGitBranching/?NODEMO](?NODEMO)'
       ]
     }
   }, {
@@ -19952,6 +21208,60 @@ require.define("/src/js/dialogs/sandbox.js",function(require,module,exports,__di
       ]
     }
   }],
+  'ja': [{
+    type: 'ModalAlert',
+    options: {
+      markdowns: [
+        '## LearnGitBranchingへようこそ',
+        '',
+        'gitのパワフルなブランチ機能のコンセプトが ',
+        '学びやすくなるようにこのアプリケーションを作りました。 ',
+        'このアプリケーションを楽しんで使って頂いて、 ',
+        '何かを学習して頂けたなら嬉しいです。',
+        '',
+        '# とりあえず触ってみたい方へ：',
+        '',
+        '簡単なデモを用意してあるので、もしよければこちらもご覧ください：',
+        '',
+        '[http://remore.github.io/learnGitBranching-ja/?demo](http://remore.github.io/learnGitBranching-ja/?demo)',
+        '',
+        'このダイアログ自体を省略するには、以下のようにURLの末尾にクエリストリング`?NODEMO`を付加してアクセスしてください。',
+        '',
+        '[http://remore.github.io/learnGitBranching-ja/?NODEMO](http://remore.github.io/learnGitBranching-ja/?NODEMO)'
+      ]
+    }
+  }, {
+    type: 'ModalAlert',
+    options: {
+      markdowns: [
+        '## ここで学べるGitのオペレーション',
+        '',
+        'ここでは、下記の種類のgitコマンドを学ぶことができます。',
+        '',
+        ' * commit',
+        ' * branch',
+        ' * checkout',
+        ' * cherry-pick',
+        ' * reset',
+        ' * revert',
+        ' * rebase',
+        ' * merge'
+      ]
+    }
+  }, {
+    type: 'ModalAlert',
+    options: {
+      markdowns: [
+        '## 学習した内容を共有できます',
+        '',
+        '画面左のコマンドプロンプトから`export tree`や`import tree`とタイプすることで、gitのツリー構造を友達に送ることができます',
+        '',
+        '何か教材になるようなケースはご存知ないでしょうか。`build level`で課題を作成したり、`import level`で他の人の課題に挑戦してみてください。',
+        '',
+        'それでは教材の選択画面に進んでみることにします。'
+      ]
+    }
+  }],
   'zh_CN': [{
     type: 'ModalAlert',
     options: {
@@ -19965,11 +21275,11 @@ require.define("/src/js/dialogs/sandbox.js",function(require,module,exports,__di
         '',
         '如果你还没看过演示，请到此查看：',
         '',
-        '[http://pcottle.github.com/learnGitBranching/?demo](http://pcottle.github.com/learnGitBranching/?demo)',
+        '[http://pcottle.github.io/learnGitBranching/?demo](http://pcottle.github.io/learnGitBranching/?demo)',
         '',
         '厌烦这个对话框？ 在 URL 后头加上 `?NODEMO` 就看不到它了，也可以直接点下边这个链接：',
         '',
-        '[http://pcottle.github.com/learnGitBranching/?NODEMO](http://pcottle.github.com/learnGitBranching/?NODEMO)'
+        '[http://pcottle.github.io/learnGitBranching/?NODEMO](http://pcottle.github.io/learnGitBranching/?NODEMO)'
       ]
     }
   }, {
@@ -20024,10 +21334,10 @@ require.define("/src/js/dialogs/sandbox.js",function(require,module,exports,__di
         // 'Unfortunately this was submitted before I finished all the help ',
         // 'and tutorial sections, so forgive the scarcity. See the demo here:',
         '',
-        '이 애플리케이션은 [Peter Cottle](https://github.com/pcottle)님의 [LearnGitBranching](http://pcottle.github.com/learnGitBranching/)를 번역한 것입니다.',
+        '이 애플리케이션은 [Peter Cottle](https://github.io/pcottle)님의 [LearnGitBranching](http://pcottle.github.io/learnGitBranching/)를 번역한 것입니다.',
         '아래 데모를 먼저 보셔도 좋습니다.',
         '',
-        '<http://pcottle.github.com/learnGitBranching/?demo&locale=ko>'
+        '<http://pcottle.github.io/learnGitBranching/?demo&locale=ko>'
       ]
     }
   }, {
@@ -20371,7 +21681,7 @@ function CommandUI() {
   var Collections = require('../models/collections');
   var CommandViews = require('../views/commandViews');
 
-  //new Views.HelperBar();
+  var mainHelprBar = new Views.MainHelperBar();
 
   this.commandCollection = new Collections.CommandCollection();
   this.commandBuffer = new Collections.CommandBuffer({
@@ -20501,6 +21811,17 @@ require.define("/src/js/dialogs/nextLevel.js",function(require,module,exports,__
       ]
     }
   }],
+  'ja': [{
+    type: 'ModalAlert',
+    options: {
+      markdowns: [
+        '## 完成!',
+        '',
+        'あなたは*{numCommands}*回のコマンドでこの課題をクリアしました; ',
+        '模範解答では{best}回です。'
+      ]
+    }
+  }],
   'zh_CN': [{
     type: 'ModalAlert',
     options: {
@@ -20533,11 +21854,11 @@ require.define("/src/js/dialogs/sandbox.js",function(require,module,exports,__di
         '',
         'If you have not seen the demo, please check it out here:',
         '',
-        '[http://pcottle.github.com/learnGitBranching/?demo](http://pcottle.github.com/learnGitBranching/?demo)',
+        '[http://pcottle.github.io/learnGitBranching/?demo](http://pcottle.github.io/learnGitBranching/?demo)',
         '',
         'Annoyed at this dialog? Append `?NODEMO` to the url to get rid of it, linked below for convenience:',
         '',
-        '[http://pcottle.github.com/learnGitBranching/?NODEMO](http://pcottle.github.com/learnGitBranching/?NODEMO)'
+        '[http://pcottle.github.io/learnGitBranching/?NODEMO](?NODEMO)'
       ]
     }
   }, {
@@ -20574,6 +21895,60 @@ require.define("/src/js/dialogs/sandbox.js",function(require,module,exports,__di
       ]
     }
   }],
+  'ja': [{
+    type: 'ModalAlert',
+    options: {
+      markdowns: [
+        '## LearnGitBranchingへようこそ',
+        '',
+        'gitのパワフルなブランチ機能のコンセプトが ',
+        '学びやすくなるようにこのアプリケーションを作りました。 ',
+        'このアプリケーションを楽しんで使って頂いて、 ',
+        '何かを学習して頂けたなら嬉しいです。',
+        '',
+        '# とりあえず触ってみたい方へ：',
+        '',
+        '簡単なデモを用意してあるので、もしよければこちらもご覧ください：',
+        '',
+        '[http://remore.github.io/learnGitBranching-ja/?demo](http://remore.github.io/learnGitBranching-ja/?demo)',
+        '',
+        'このダイアログ自体を省略するには、以下のようにURLの末尾にクエリストリング`?NODEMO`を付加してアクセスしてください。',
+        '',
+        '[http://remore.github.io/learnGitBranching-ja/?NODEMO](http://remore.github.io/learnGitBranching-ja/?NODEMO)'
+      ]
+    }
+  }, {
+    type: 'ModalAlert',
+    options: {
+      markdowns: [
+        '## ここで学べるGitのオペレーション',
+        '',
+        'ここでは、下記の種類のgitコマンドを学ぶことができます。',
+        '',
+        ' * commit',
+        ' * branch',
+        ' * checkout',
+        ' * cherry-pick',
+        ' * reset',
+        ' * revert',
+        ' * rebase',
+        ' * merge'
+      ]
+    }
+  }, {
+    type: 'ModalAlert',
+    options: {
+      markdowns: [
+        '## 学習した内容を共有できます',
+        '',
+        '画面左のコマンドプロンプトから`export tree`や`import tree`とタイプすることで、gitのツリー構造を友達に送ることができます',
+        '',
+        '何か教材になるようなケースはご存知ないでしょうか。`build level`で課題を作成したり、`import level`で他の人の課題に挑戦してみてください。',
+        '',
+        'それでは教材の選択画面に進んでみることにします。'
+      ]
+    }
+  }],
   'zh_CN': [{
     type: 'ModalAlert',
     options: {
@@ -20587,11 +21962,11 @@ require.define("/src/js/dialogs/sandbox.js",function(require,module,exports,__di
         '',
         '如果你还没看过演示，请到此查看：',
         '',
-        '[http://pcottle.github.com/learnGitBranching/?demo](http://pcottle.github.com/learnGitBranching/?demo)',
+        '[http://pcottle.github.io/learnGitBranching/?demo](http://pcottle.github.io/learnGitBranching/?demo)',
         '',
         '厌烦这个对话框？ 在 URL 后头加上 `?NODEMO` 就看不到它了，也可以直接点下边这个链接：',
         '',
-        '[http://pcottle.github.com/learnGitBranching/?NODEMO](http://pcottle.github.com/learnGitBranching/?NODEMO)'
+        '[http://pcottle.github.io/learnGitBranching/?NODEMO](http://pcottle.github.io/learnGitBranching/?NODEMO)'
       ]
     }
   }, {
@@ -20646,10 +22021,10 @@ require.define("/src/js/dialogs/sandbox.js",function(require,module,exports,__di
         // 'Unfortunately this was submitted before I finished all the help ',
         // 'and tutorial sections, so forgive the scarcity. See the demo here:',
         '',
-        '이 애플리케이션은 [Peter Cottle](https://github.com/pcottle)님의 [LearnGitBranching](http://pcottle.github.com/learnGitBranching/)를 번역한 것입니다.',
+        '이 애플리케이션은 [Peter Cottle](https://github.io/pcottle)님의 [LearnGitBranching](http://pcottle.github.io/learnGitBranching/)를 번역한 것입니다.',
         '아래 데모를 먼저 보셔도 좋습니다.',
         '',
-        '<http://pcottle.github.com/learnGitBranching/?demo&locale=ko>'
+        '<http://pcottle.github.io/learnGitBranching/?demo&locale=ko>'
       ]
     }
   }, {
@@ -21107,6 +22482,14 @@ GitEngine.prototype.init = function() {
 
   // commit once to get things going
   this.commit();
+};
+
+GitEngine.prototype.hasOrigin = function() {
+  return false;
+};
+
+GitEngine.prototype.isOrigin = function() {
+  return false;
 };
 
 GitEngine.prototype.exportTree = function() {
@@ -22666,6 +24049,14 @@ var Ref = Backbone.Model.extend({
     }
   },
 
+  getIsRemote: function() {
+    return false;
+  },
+
+  getName: function() {
+    return this.get('id');
+  },
+
   targetChanged: function(model, targetValue, ev) {
     // push our little 3 stack back. we need to do this because
     // backbone doesn't give you what the value WAS, only what it was changed
@@ -22681,7 +24072,12 @@ var Ref = Backbone.Model.extend({
 
 var Branch = Ref.extend({
   defaults: {
-    visBranch: null
+    visBranch: null,
+    origin: null
+  },
+
+  getIsRemote: function() {
+    return this.get('origin') !== null;
   },
 
   initialize: function() {
@@ -23263,7 +24659,7 @@ var getStartDialog = exports.getStartDialog = function(level) {
     }
   };
   var startCopy = _.clone(
-    level.startDialog[util.getDefaultLocale()] || level.startDialog
+    level.startDialog[getDefaultLocale()] || level.startDialog
   );
   startCopy.childViews.unshift(errorAlert);
 
@@ -23279,6 +24675,7 @@ require.define("/src/js/intl/strings.js",function(require,module,exports,__dirna
   ///////////////////////////////////////////////////////////////////////////
   'finish-dialog-finished': {
     '__desc__': 'One of the lines in the next level dialog',
+    'ja': '最後のレベルをクリアしました！すごい！！',
     'en_US': 'Wow! You finished the last level, great!',
     'zh_CN': '我的个天！你完成了最后一关，碉堡了！'
   },
@@ -23286,18 +24683,21 @@ require.define("/src/js/intl/strings.js",function(require,module,exports,__dirna
   'finish-dialog-next': {
     '__desc__': 'One of the lines in the next level dialog',
     'en_US': 'Would you like to move on to *"{nextLevel}"*, the next level?',
+    'ja': '次の章 *"{nextLevel}"* へ進みますか？',
     'zh_CN': '要不前进到下一关 *“{nextLevel}”*？'
   },
   ///////////////////////////////////////////////////////////////////////////
   'finish-dialog-win': {
     '__desc__': 'One of the lines in the next level dialog',
     'en_US': 'Awesome! You matched or exceeded our solution.',
+    'ja': '素晴らしい！このレベルをクリアしましたね。',
     'zh_CN': '牛鼻啊！你达到或者完爆了我们的答案。'
   },
   ///////////////////////////////////////////////////////////////////////////
   'finish-dialog-lose': {
     '__desc__': 'When the user entered more commands than our best, encourage them to do better',
     'en_US': 'See if you can whittle it down to {best} :D',
+    'ja': '模範解答の回数={best}回でクリアする方法も考えてみましょう :D',
     'zh_CN': '试试看你能否在 {best} 之内搞定 :D'
   },
   ///////////////////////////////////////////////////////////////////////////
@@ -23451,6 +24851,7 @@ require.define("/src/js/intl/strings.js",function(require,module,exports,__dirna
   'learn-git-branching': {
     '__desc__': 'The title of the app, with spaces',
     'en_US': 'Learn Git Branching',
+    'ja': '日本語版リポジトリ',
     'ko': 'Git 브랜치 배우기',
     'zh_CN': '学习Git分支'
   },
@@ -24296,6 +25697,7 @@ var Q = require('q');
 var util = require('../util');
 var Main = require('../app');
 var intl = require('../intl');
+var log = require('../log');
 
 var Errors = require('../util/errors');
 var Sandbox = require('../level/sandbox').Sandbox;
@@ -24409,6 +25811,10 @@ var Level = Sandbox.extend({
     });
   },
 
+  getEnglishName: function() {
+    return this.level.name.en_US;
+  },
+
   initName: function() {
     var name = intl.getName(this.level);
 
@@ -24475,6 +25881,7 @@ var Level = Sandbox.extend({
         'commandSubmitted',
         toIssue
       );
+      log.showLevelSolution(this.getEnglishName());
     }, this);
 
     var commandStr = command.get('rawStr');
@@ -24674,6 +26081,7 @@ var Level = Sandbox.extend({
     this.solved = true;
     if (!this.isShowingSolution) {
       Main.getEvents().trigger('levelSolved', this.level.id);
+      log.levelSolved(this.getEnglishName());
     }
 
     this.hideGoal();
@@ -25274,6 +26682,7 @@ var Sandbox = Backbone.View.extend({
           deferred: whenLevelOpen,
           command: command
         });
+        this.hide();
 
         whenLevelOpen.promise.then(function() {
           command.finishWith(deferred);
@@ -25527,6 +26936,37 @@ exports.getOptimisticLevelBuilderParse = function() {
 
 });
 require("/src/js/level/sandboxCommands.js");
+
+require.define("/src/js/log/index.js",function(require,module,exports,__dirname,__filename,process,global){
+var log = function(category, action, label) {
+  window._gaq = window._gaq || [];
+  window._gaq.push(['_trackEvent', category, action, label]);
+  //console.log('just logged ', [category, action, label].join('|'));
+};
+
+exports.viewInteracted = function(viewName) {
+  log('views', 'interacted', viewName);
+};
+
+exports.showLevelSolution = function(levelName) {
+  log('levels', 'showedLevelSolution', levelName);
+};
+
+exports.levelSelected = function(levelName) {
+  log('levels', 'levelSelected', levelName);
+};
+
+exports.levelSolved = function(levelName) {
+  log('levels', 'levelSolved', levelName);
+};
+
+exports.commandEntered = function(value) {
+  log('commands', 'commandEntered', value);
+};
+
+
+});
+require("/src/js/log/index.js");
 
 require.define("/src/js/models/collections.js",function(require,module,exports,__dirname,__filename,process,global){var _ = require('underscore');
 var Q = require('q');
@@ -26644,7 +28084,7 @@ var MultiViewBuilder = ContainedBase.extend({
   },
 
   addView: function(ev) {
-    var el = ev.srcElement;
+    var el = ev.target;
     var type = $(el).attr('data-type');
 
     var whenDone = Q.defer();
@@ -26667,7 +28107,7 @@ var MultiViewBuilder = ContainedBase.extend({
   },
 
   testOneView: function(ev) {
-    var el = ev.srcElement;
+    var el = ev.target;
     var index = $(el).attr('data-index');
     var toTest = this.getChildViews()[index];
     var MultiView = require('../views/multiView').MultiView;
@@ -26684,7 +28124,7 @@ var MultiViewBuilder = ContainedBase.extend({
   },
 
   editOneView: function(ev) {
-    var el = ev.srcElement;
+    var el = ev.target;
     var index = $(el).attr('data-index');
     var type = $(el).attr('data-type');
 
@@ -26708,7 +28148,7 @@ var MultiViewBuilder = ContainedBase.extend({
   },
 
   deleteOneView: function(ev) {
-    var el = ev.srcElement;
+    var el = ev.target;
     var index = $(el).attr('data-index');
     var toSlice = this.getChildViews();
 
@@ -26761,6 +28201,7 @@ var Errors = require('../util/errors');
 var Warning = Errors.Warning;
 
 var util = require('../util');
+var log = require('../log');
 var keyboard = require('../util/keyboard');
 
 var CommandPromptView = Backbone.View.extend({
@@ -26824,7 +28265,7 @@ var CommandPromptView = Backbone.View.extend({
   },
 
   onKeyDown: function(e) {
-    var el = e.srcElement || e.currentTarget;
+    var el = e.target;
     this.updatePrompt(el);
   },
 
@@ -26982,6 +28423,7 @@ var CommandPromptView = Backbone.View.extend({
     if (this.commands.length > 100) {
       this.clearLocalStorage();
     }
+    log.commandEntered(value);
   },
 
   submitCommand: function(value) {
@@ -27365,7 +28807,7 @@ var GitDemonstrationView = ContainedBase.extend({
 
   initVis: function() {
     this.mainVis = new Visualization({
-      el: this.$('div.visHolder')[0],
+      el: this.$('div.visHolder div.visHolderInside')[0],
       noKeyboardInput: true,
       noClick: true,
       smallCanvas: true,
@@ -27395,6 +28837,7 @@ var Backbone = (!require('../util').isBrowser()) ? require('backbone') : window.
 
 var Main = require('../app');
 var intl = require('../intl');
+var log = require('../log');
 var Constants = require('../util/constants');
 var KeyboardListener = require('../util/keyboard').KeyboardListener;
 var GitError = require('../util/errors').GitError;
@@ -27962,29 +29405,192 @@ var LevelToolbar = BaseView.extend({
 
 var HelperBar = BaseView.extend({
   tagName: 'div',
-  className: 'helperBar',
+  className: 'helperBar transitionAll',
   template: _.template($('#helper-bar-template').html()),
   events: {
-    'click div': 'onClick'
+    'click a': 'onClick'
   },
 
   onClick: function(ev) {
+    var target = ev.target;
+    var id = $(target).attr('data-id');
+    var funcName = 'on' + id[0].toUpperCase() + id.slice(1) + 'Click';
+    this[funcName].call(this);
+  },
+
+  show: function() {
+    this.$el.toggleClass('show', true);
+  },
+
+  hide: function() {
+    this.$el.toggleClass('show', false);
+    if (this.deferred) {
+      this.deferred.resolve();
+    }
+  },
+
+  getItems: function() {
+    return [];
+  },
+
+  setupChildren: function() {
+  },
+
+  fireCommand: function(command) {
+    Main.getEventBaton().trigger('commandSubmitted', command);
+  },
+
+  showDeferMe: function(otherBar) {
+    this.hide();
+
+    var whenClosed = Q.defer();
+    otherBar.deferred = whenClosed;
+    whenClosed.promise.then(_.bind(function() {
+      this.show();
+    }, this));
+    otherBar.show();
+  },
+
+  onExitClick: function() {
+    this.hide();
   },
 
   initialize: function(options) {
     options = options || {};
     this.destination = $('body');
 
-    var items = [{
-      text: '??',
-      id: 'main'
-    }];
-
     this.JSON = {
-      items: items
+      items: this.getItems()
     };
-
     this.render();
+    this.setupChildren();
+
+    if (!options.wait) {
+      this.show();
+    }
+  }
+});
+
+var IntlHelperBar = HelperBar.extend({
+  getItems: function() {
+    return [{
+      text: 'Git Branching',
+      id: 'english'
+    }, {
+      text: '日本語版リポジトリ',
+      id: 'japanese'
+    }, {
+      text: 'Git 브랜치 배우기',
+      id: 'korean'
+    }, {
+      text: '学习Git分支',
+      id: 'chinese'
+    }, {
+      text: 'Français(e)',
+      id: 'french'
+    }, {
+      icon: 'signout',
+      id: 'exit'
+    }];
+  },
+
+  fireCommand: function() {
+    log.viewInteracted('intlSelect');
+    HelperBar.prototype.fireCommand.apply(this, arguments);
+  },
+
+  onJapaneseClick: function() {
+    this.fireCommand('locale ja; levels');
+    this.hide();
+  },
+
+  onEnglishClick: function() {
+    this.fireCommand('locale en_US; levels');
+    this.hide();
+  },
+
+  onKoreanClick: function() {
+    this.fireCommand('locale ko; levels');
+    this.hide();
+  },
+
+  onFrenchClick: function() {
+    this.fireCommand('locale fr_FR; levels');
+    this.hide();
+  },
+
+  onChineseClick: function() {
+    this.fireCommand('locale zh_CN; levels');
+    this.hide();
+  }
+});
+
+var CommandsHelperBar = HelperBar.extend({
+  getItems: function() {
+    return [{
+      text: 'Levels',
+      id: 'levels'
+    }, {
+      text: 'Reset',
+      id: 'reset'
+    }, {
+      text: 'Undo',
+      id: 'undo'
+    }, {
+      text: 'Help',
+      id: 'help'
+    }, {
+      icon: 'signout',
+      id: 'exit'
+    }];
+  },
+
+  fireCommand: function() {
+    log.viewInteracted('helperBar');
+    HelperBar.prototype.fireCommand.apply(this, arguments);
+  },
+
+  onLevelsClick: function() {
+    this.fireCommand('levels');
+  },
+
+  onResetClick: function() {
+    this.fireCommand('reset');
+  },
+
+  onUndoClick: function() {
+    this.fireCommand('undo');
+  },
+
+  onHelpClick: function() {
+    this.fireCommand('help general; git help');
+  }
+});
+
+var MainHelperBar = HelperBar.extend({
+  getItems: function() {
+    return [{
+      icon: 'question-sign',
+      id: 'commands'
+    }, {
+      icon: 'globe',
+      id: 'intl'
+    }];
+  },
+
+  onIntlClick: function() {
+    this.showDeferMe(this.intlHelper);
+    log.viewInteracted('openIntlBar');
+  },
+
+  onCommandsClick: function() {
+    this.showDeferMe(this.commandsHelper);
+    log.viewInteracted('openCommandsBar');
+  },
+
+  setupChildren: function() {
+    this.commandsHelper = new CommandsHelperBar({ wait: true });
+    this.intlHelper = new IntlHelperBar({ wait: true});
   }
 });
 
@@ -28055,7 +29661,8 @@ exports.LeftRightView = LeftRightView;
 exports.ZoomAlertWindow = ZoomAlertWindow;
 exports.ConfirmCancelTerminal = ConfirmCancelTerminal;
 exports.WindowSizeAlertWindow = WindowSizeAlertWindow;
-exports.HelperBar = HelperBar;
+
+exports.MainHelperBar = MainHelperBar;
 
 exports.CanvasTerminalHolder = CanvasTerminalHolder;
 exports.LevelToolbar = LevelToolbar;
@@ -28072,6 +29679,7 @@ var Backbone = (!require('../util').isBrowser()) ? require('backbone') : window.
 
 var util = require('../util');
 var intl = require('../intl');
+var log = require('../log');
 var KeyboardListener = require('../util/keyboard').KeyboardListener;
 var Main = require('../app');
 
@@ -28297,6 +29905,9 @@ var LevelDropdownView = ContainedBase.extend({
         'commandSubmitted',
         'level ' + id
       );
+      var level = Main.getLevelArbiter().getLevel(id);
+      var name = level.name.en_US;
+      log.levelSelected(name);
     }
     this.hide();
   },
@@ -28324,7 +29935,9 @@ var SeriesView = BaseView.extend({
   className: 'seriesView box flex1 vertical',
   template: _.template($('#series-view').html()),
   events: {
-    'click div.levelIcon': 'click'
+    'click div.levelIcon': 'click',
+    'mouseenter div.levelIcon': 'enterIcon',
+    'mouseleave div.levelIcon': 'leaveIcon'
   },
 
   initialize: function(options) {
@@ -28339,9 +29952,11 @@ var SeriesView = BaseView.extend({
     }, this);
 
     this.destination = options.destination;
+    // use a non-breaking space to prevent the level from bouncing around
+    // from missing strings
     this.JSON = {
       displayName: intl.getIntlKey(this.info, 'displayName'),
-      about: intl.getIntlKey(this.info, 'about'),
+      about: intl.getIntlKey(this.info, 'about') || "&nbsp;",
       ids: this.levelIDs
     };
 
@@ -28358,13 +29973,32 @@ var SeriesView = BaseView.extend({
     });
   },
 
-  click: function(ev) {
-    var element = ev.srcElement || ev.currentTarget;
-    if (!element) {
-      console.warn('wut, no id'); return;
-    }
+  getEventID: function(ev) {
+    var element = ev.target;
+    return $(element).attr('data-id');
+  },
 
-    var id = $(element).attr('data-id');
+  resetAbout: function() {
+    this.$('p.about').text(intl.getIntlKey(this.info, 'about'))
+      .css('font-style', 'inherit');
+  },
+
+  setAbout: function(content) {
+    this.$('p.about').text(content).css('font-style', 'italic');
+  },
+
+  enterIcon: function(ev) {
+    var id = this.getEventID(ev);
+    var level = Main.getLevelArbiter().getLevel(id);
+    this.setAbout(intl.getName(level));
+  },
+
+  leaveIcon: function() {
+    this.resetAbout();
+  },
+
+  click: function(ev) {
+    var id = this.getEventID(ev);
     this.navEvents.trigger('clickedID', id);
   }
 });
@@ -29137,11 +30771,6 @@ function GitVisuals(options) {
   this.branchCollection.on('remove', this.removeBranch, this);
   this.deferred = [];
 
-  // eventually have origin support here
-  this.posBoundaries = {
-    min: 0,
-    max: 1
-  };
   this.flipFraction = 0.65;
 
   var Main = require('../app');
@@ -29215,9 +30844,28 @@ GitVisuals.prototype.getScreenPadding = function() {
   };
 };
 
+GitVisuals.prototype.getPosBoundaries = function() {
+  if (this.gitEngine.hasOrigin()) {
+    return {
+      min: 0,
+      max: 0.5
+    };
+  } else if (this.gitEngine.isOrigin()) {
+    return {
+      min: 0.5,
+      max: 1
+    };
+  }
+  return {
+    min: 0,
+    max: 1
+  };
+};
+
 GitVisuals.prototype.getFlipPos = function() {
-  var min = this.posBoundaries.min;
-  var max = this.posBoundaries.max;
+  var bounds = this.getPosBoundaries();
+  var min = bounds.min;
+  var max = bounds.max;
   return this.flipFraction * (max - min) + min;
 };
 
@@ -29571,10 +31219,11 @@ GitVisuals.prototype.calcBranchStacks = function() {
 GitVisuals.prototype.calcWidth = function() {
   this.maxWidthRecursive(this.rootCommit);
 
+  var bounds = this.getPosBoundaries();
   this.assignBoundsRecursive(
     this.rootCommit,
-    this.posBoundaries.min,
-    this.posBoundaries.max
+    bounds.min,
+    bounds.max
   );
 };
 
@@ -29784,7 +31433,7 @@ GitVisuals.prototype.genResizeFunc = function() {
     _.bind(function(width, height) {
 
       // refresh when we are ready if we are animating som ething
-      if (GLOBAL.isAnimating) {
+      if (false && GLOBAL.isAnimating) {
         var Main = require('../app');
         Main.getEventBaton().trigger('commandSubmitted', 'refresh');
       } else {
@@ -30109,17 +31758,31 @@ var VisBranch = VisBase.extend({
     var commit = this.gitEngine.getCommitFromRef(this.get('branch'));
     var visNode = commit.get('visNode');
 
-    var threshold = this.get('gitVisuals').getFlipPos();
-    // somewhat tricky flip management here
-    var flip;
-    if (visNode.get('pos').x > threshold) {
-      flip = (this.get('isHead')) ? 1 : -1;
-      this.set('flip', flip);
-    } else {
-      flip = (this.get('isHead')) ? -1 : 1;
-      this.set('flip', flip);
-    }
+    this.set('flip', this.getFlipBool(commit, visNode));
     return visNode.getScreenCoords();
+  },
+
+  getFlipBool: function(commit, visNode) {
+    var threshold = this.get('gitVisuals').getFlipPos();
+    var overThreshold = (visNode.get('pos').x > threshold);
+
+    // easy logic first
+    if (!this.get('isHead')) {
+      if (this.getIsRemote()) {
+        return (overThreshold) ? 1 : -1;
+      } else {
+        return (overThreshold) ? -1 : 1;
+      }
+    }
+
+    // now for HEAD....
+    if (overThreshold) {
+      // if by ourselves, then feel free to squeeze in. but
+      // if other branches are here, then we need to show separate
+      return (this.isBranchStackEmpty()) ? -1 : 1;
+    } else {
+      return (this.isBranchStackEmpty()) ? 1 : -1;
+    }
   },
 
   getBranchStackIndex: function() {
@@ -30147,8 +31810,25 @@ var VisBranch = VisBase.extend({
     return this.getBranchStackArray().length;
   },
 
+  isBranchStackEmpty: function() {
+    // useful function for head when computing flip logic
+    var arr = this.gitVisuals.branchStackMap[this.getCommitID()];
+    return (arr) ?
+      arr.length === 0 :
+      true;
+  },
+
+  getCommitID: function() {
+    var target = this.get('branch').get('target');
+    if (target.get('type') === 'branch') {
+      // for HEAD
+      target = target.get('target');
+    }
+    return target.get('id');
+  },
+
   getBranchStackArray: function() {
-    var arr = this.gitVisuals.branchStackMap[this.get('branch').get('target').get('id')];
+    var arr = this.gitVisuals.branchStackMap[this.getCommitID()];
     if (arr === undefined) {
       // this only occurs when we are generating graphics inside of
       // a new Branch instantiation, so we need to force the update
@@ -30290,12 +31970,16 @@ var VisBranch = VisBase.extend({
     };
   },
 
-  getName: function() {
-    var name = this.get('branch').get('id');
-    var selected = this.gitEngine.HEAD.get('target').get('id');
+  getIsRemote: function() {
+    return this.get('branch').getIsRemote();
+  },
 
-    var add = (selected == name) ? '*' : '';
-    return name + add;
+  getName: function() {
+    var name = this.get('branch').getName();
+    var selected = this.get('branch') === this.gitEngine.HEAD.get('target');
+
+    var after = (selected) ? '*' : '';
+    return name + after;
   },
 
   nonTextToFront: function() {
@@ -30412,6 +32096,7 @@ var VisBranch = VisBase.extend({
     var rectSize = this.getRectSize();
 
     var arrowPath = this.getArrowPath();
+    var dashArray = (this.getIsRemote()) ? '--' : '';
 
     return {
       text: {
@@ -30427,6 +32112,7 @@ var VisBranch = VisBase.extend({
         opacity: nonTextOpacity,
         fill: this.getFill(),
         stroke: this.get('stroke'),
+        'stroke-dasharray': dashArray,
         'stroke-width': this.get('stroke-width')
       },
       arrow: {
@@ -31300,29 +32986,225 @@ exports.Visualization = Visualization;
 });
 require("/src/js/visuals/visualization.js");
 
+require.define("/src/levels/advanced/multipleParents.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+  "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C7\",\"id\":\"master\"},\"bugWork\":{\"target\":\"C2\",\"id\":\"bugWork\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C3\"],\"id\":\"C4\"},\"C5\":{\"parents\":[\"C2\"],\"id\":\"C5\"},\"C6\":{\"parents\":[\"C4\",\"C5\"],\"id\":\"C6\"},\"C7\":{\"parents\":[\"C6\"],\"id\":\"C7\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
+  "solutionCommand": "git branch bugWork master^^2^",
+  "startTree": "{\"branches\":{\"master\":{\"target\":\"C7\",\"id\":\"master\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C3\"],\"id\":\"C4\"},\"C5\":{\"parents\":[\"C2\"],\"id\":\"C5\"},\"C6\":{\"parents\":[\"C4\",\"C5\"],\"id\":\"C6\"},\"C7\":{\"parents\":[\"C6\"],\"id\":\"C7\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
+  "name": {
+    "en_US": "Multiple parents",
+    "zh_CN": "多个父提交记录"
+  },
+  "hint": {
+    "en_US": "Use `git branch bugWork` with a target commit to create the missing reference.",
+    "zh_CN": "使用`git branch bugWork`加上一个目标提交记录来创建消失的引用。"
+  },
+  "startDialog": {
+    "en_US": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "### Specifying Parents",
+              "",
+              "Like the `~` modifier, the `^` modifier also accepts an optional number after it.",
+              "",
+              "Rather than specifying the number of generations to go back (what `~` takes), the modifier on `^` specifies which parent reference to follow from a merge commit. Remember that merge commits have multiple parents, so the path to choose is ambiguous.",
+              "",
+              "Git will normally follow the \"first\" parent upwards from a merge commit, but specifying a number with `^` changes this default behavior.",
+              "",
+              "Enough talking, let's see it in action.",
+              ""
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "Here we have a merge commit. If we checkout `master^` without the modifier, we will follow the first parent after the merge commit. ",
+              "",
+              "(*In our visuals, the first parent is positioned directly above the merge commit.*)"
+            ],
+            "afterMarkdowns": [
+              "Easy -- this is what we are all used to."
+            ],
+            "command": "git checkout master^",
+            "beforeCommand": "git checkout HEAD^; git commit; git checkout master; git merge C2"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "Now let's try specifying the second parent instead..."
+            ],
+            "afterMarkdowns": [
+              "See? We followed the other parent upwards."
+            ],
+            "command": "git checkout master^2",
+            "beforeCommand": "git checkout HEAD^; git commit; git checkout master; git merge C2"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "The `^` and `~` modifiers can make moving around a commit tree very powerful:"
+            ],
+            "afterMarkdowns": [
+              "Lightning fast!"
+            ],
+            "command": "git checkout HEAD~; git checkout HEAD^2; git checkout HEAD~2",
+            "beforeCommand": "git commit; git checkout C0; git commit; git commit; git commit; git checkout master; git merge C5; git commit"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "Even crazier, these modifiers can be chained together! Check this out:"
+            ],
+            "afterMarkdowns": [
+              "The same movement as before, but all in one command."
+            ],
+            "command": "git checkout HEAD~^2~2",
+            "beforeCommand": "git commit; git checkout C0; git commit; git commit; git commit; git checkout master; git merge C5; git commit"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "### Put it to practice",
+              "",
+              "To complete this level, create a new branch at the specified destination.",
+              "",
+              "Obviously it would be easy to specify the commit directly (with something like `C6`), but I challenge you to use the modifiers we talked about instead!"
+            ]
+          }
+        }
+      ]
+    },
+    "zh_CN": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "### 选择父提交",
+              "",
+              "和`~`修改符一样，`^`修改符之后也可以跟一个（可选的）数字。",
+              "",
+              "这不是用来指定向上返回几代（`~`的作用），`^`后的数字指定跟随合并提交记录的哪一个父提交。还记得一个合并提交有多个父提交吧，所有选择哪条路径不是那么清晰。",
+              "",
+              "Git默认选择跟随合并提交的\"第一个\"父提交，使用`^`后跟一个数字来改变这一默认行为。",
+              "",
+              "废话不多说，举个例子。",
+              ""
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "这里有一个合并提交。如果不加数字修改符直接切换到`master^`，会回到第一个父提交。",
+              "",
+              "(*在我们的图示中，第一个父提交是指合并提交正上方的那个父提交。*)"
+            ],
+            "afterMarkdowns": [
+              "OK--这恰好是我们想要的。"
+            ],
+            "command": "git checkout master^",
+            "beforeCommand": "git checkout HEAD^; git commit; git checkout master; git merge C2"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "现在来试试选择第二个父提交……"
+            ],
+            "afterMarkdowns": [
+              "看见了吧？我们回到了第二个父提交。"
+            ],
+            "command": "git checkout master^2",
+            "beforeCommand": "git checkout HEAD^; git commit; git checkout master; git merge C2"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "使用`^`和`~`可以自由在在提交树中移动："
+            ],
+            "afterMarkdowns": [
+              "快若闪电！"
+            ],
+            "command": "git checkout HEAD~; git checkout HEAD^2; git checkout HEAD~2",
+            "beforeCommand": "git commit; git checkout C0; git commit; git commit; git commit; git checkout master; git merge C5; git commit"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "再疯狂点，这些修改符支持链式操作！试一下这个："
+            ],
+            "afterMarkdowns": [
+              "和前面的结果一样，但只用了一条命令。"
+            ],
+            "command": "git checkout HEAD~^2~2",
+            "beforeCommand": "git commit; git checkout C0; git commit; git commit; git commit; git checkout master; git merge C5; git commit"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "### 实践一下",
+              "",
+              "要完成此关，在指定的目标位置创建一个新的分支。",
+              "",
+              "很明显可以简单的直接使用提交记录的hash值（比如`C6`），但我要求你使用刚刚讲到的相对引用修饰符！"
+            ]
+          }
+        }
+      ]
+    }
+  }
+};
+
+});
+require("/src/levels/advanced/multipleParents.js");
+
 require.define("/src/levels/index.js",function(require,module,exports,__dirname,__filename,process,global){// Each level is part of a "sequence;" levels within
 // a sequence proceed in the order listed here
 exports.levelSequences = {
   intro: [
-    require('../../levels/intro/1').level,
-    require('../../levels/intro/2').level,
-    require('../../levels/intro/3').level,
-    require('../../levels/intro/4').level
+    require('../../levels/intro/commits').level,
+    require('../../levels/intro/branching').level,
+    require('../../levels/intro/merging').level,
+    require('../../levels/intro/rebasing').level
   ],
   rampup: [
-    require('../../levels/rampup/1').level,
-    require('../../levels/rampup/2').level,
-    require('../../levels/rampup/3').level,
-    require('../../levels/rampup/4').level
+    require('../../levels/rampup/detachedHead').level,
+    require('../../levels/rampup/relativeRefs').level,
+    require('../../levels/rampup/relativeRefs2').level,
+    require('../../levels/rampup/reversingChanges').level
   ],
   rebase: [
-    require('../../levels/rebase/1').level,
-    require('../../levels/rebase/2').level
+    require('../../levels/rebase/manyRebases').level
   ],
   mixed: [
-    require('../../levels/mixed/1').level,
-    require('../../levels/mixed/2').level,
-    require('../../levels/mixed/3').level
+    require('../../levels/mixed/grabbingOneCommit').level,
+    require('../../levels/mixed/jugglingCommits').level,
+    require('../../levels/mixed/jugglingCommits2').level
+  ],
+  advanced: [
+    require('../../levels/advanced/multipleParents').level,
+    require('../../levels/rebase/selectiveRebase').level
   ]
 };
 
@@ -31331,51 +33213,71 @@ exports.sequenceInfo = {
   intro: {
     displayName: {
       'en_US': 'Introduction Sequence',
+      'ja': 'まずはここから',
       'fr_FR': 'Sequence d\'introduction',
-      'zh_CN': '简介序列',
+      'zh_CN': '序列简介',
       'ko': '기본 명령어'
     },
     about: {
       'en_US': 'A nicely paced introduction to the majority of git commands',
+      'ja': 'gitの基本的なコマンド群をほどよいペースで学ぶ',
       'fr_FR': 'Une introduction en douceur à la majoité des commandes git',
-      'zh_CN': '一个节奏感良好的主流 Git 命令介绍',
+      'zh_CN': '循序渐进介绍git主要命令',
       'ko': '브랜치 관련 주요 git 명령어를 깔끔하게 알려드립니다'
     }
   },
   rampup: {
     displayName: {
-      'en_US': 'Ramping Up'
+      'en_US': 'Ramping Up',
+      'ja': '次のレベルに進もう',
+      'zh_CN': '进阶篇'
     },
     about: {
-      'en_US': 'The next serving of 100% git awesomes-ness. Hope you\'re hungry'
+      'en_US': 'The next serving of 100% git awesomes-ness. Hope you\'re hungry',
+      'ja': '更にgitの素晴らしさを堪能しよう',
+      'zh_CN': '接下来是git的超赞特性。迫不及待了吧!'
     }
   },
   rebase: {
     displayName: {
       'en_US': 'Master the Rebase Luke!',
+      'ja': 'Rebaseをモノにする',
       'fr_FR': 'Maîtrise Rebase, Luke!',
-      'zh_CN': '掌握衍合，兄弟！',
+      'zh_CN': '精通Rebase！',
       'ko': '리베이스 완전정복!'
     },
     about: {
       'en_US': 'What is this whole rebase hotness everyone is talking about? Find out!',
+      'ja': '話題のrebaseってどんなものだろう？って人にオススメ',
       'fr_FR': 'Que\'est-ce que c\'est que ce rebase dont tout le monde parle ? Découvrez-le !',
       'ko': '그 좋다고들 말하는 rebase에 대해 알아봅시다!',
-      'zh_CN': '大家说的火热的衍合都是些神马？看看吧！'
+      'zh_CN': '大家都在说的rebase究竟是神马？看看吧！'
     }
   },
   mixed: {
     displayName: {
       'en_US': 'A Mixed Bag',
+      'ja': '様々なtips',
       'fr_FR': 'Un assortiment',
       'ko': '종합선물세트',
       'zh_CN': '大杂烩？'
     },
     about: {
       'en_US': 'A mixed bag of Git techniques, tricks, and tips',
+      'ja': 'gitを使う上での様々なtipsやテクニックなど',
       'fr_FR': 'Un assortiment de techniques et astuces pour utiliser Git',
       'ko': 'Git을 다루는 다양한 팁과 테크닉을 다양하게 알아봅니다',
-      'zh_CN': 'Git技术，技巧与贴士'
+      'zh_CN': 'Git技术，技巧与贴士杂烩'
+    }
+  },
+  advanced: {
+    displayName: {
+      'en_US': 'Advanced Topics',
+      'zh_CN': '高级主题'
+    },
+    about: {
+      'en_US': 'For the truly brave!',
+      'zh_CN': '只为真正的勇士！'
     }
   }
 };
@@ -31384,12 +33286,430 @@ exports.sequenceInfo = {
 });
 require("/src/levels/index.js");
 
-require.define("/src/levels/intro/1.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/src/levels/intro/branching.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+  "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C1\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C1\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"}},\"HEAD\":{\"target\":\"bugFix\",\"id\":\"HEAD\"}}",
+  "solutionCommand": "git branch bugFix;git checkout bugFix",
+  "name": {
+    "en_US": "Branching in Git",
+    "ja": "Gitのブランチ",
+    "ko": "Git에서 브랜치 쓰기",
+    "fr_FR": "Gérer les branches avec Git",
+    "zh_CN": "建立Git分支"
+  },
+  "hint": {
+    "en_US": "Make a new branch with \"git branch [name]\" and check it out with \"git checkout [name]\"",
+    "ja": "ブランチの作成（\"git branch [ブランチ名]\"）と、チェックアウト（\"git checkout [ブランチ名]\"）",
+    "fr_FR": "Faites une nouvelle branche avec \"git branch [nom]\" positionnez-vous dans celle-ci avec \"git checkout [nom]\"",
+    "zh_CN": "用 'git branch [分支名]' 来创建分支，用 'git checkout [分支名]' 切换到分支",
+    "ko": "\"git branch [브랜치명]\"으로 새 브랜치를 만들고, \"git checkout [브랜치명]\"로 그 브랜치로 이동하세요"
+  },
+  "disabledMap": {
+    "git revert": true
+  },
+  "startDialog": {
+    "en_US": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Git Branches",
+              "",
+              "Branches in Git are incredibly lightweight as well. They are simply references to a specific commit -- nothing more. This is why many Git enthusiasts chant the mantra:",
+              "",
+              "```",
+              "branch early, and branch often",
+              "```",
+              "",
+              "Because there is no storage / memory overhead with making many branches, it's easier to logically divide up your work than have big beefy branches.",
+              "",
+              "When we start mixing branches and commits, we will see how these two features combine. For now though, just remember that a branch essentially says \"I want to include the work of this commit and all parent commits.\""
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "Let's see what branches look like in practice.",
+              "",
+              "Here we will check out a new branch named `newImage`"
+            ],
+            "afterMarkdowns": [
+              "There, that's all there is to branching! The branch `newImage` now refers to commit `C1`"
+            ],
+            "command": "git branch newImage",
+            "beforeCommand": ""
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "Let's try to put some work on this new branch. Hit the button below"
+            ],
+            "afterMarkdowns": [
+              "Oh no! The `master` branch moved but the `newImage` branch didn't! That's because we weren't \"on\" the new branch, which is why the asterisk (*) was on `master`"
+            ],
+            "command": "git commit",
+            "beforeCommand": "git branch newImage"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "Let's tell git we want to checkout the branch with",
+              "",
+              "```",
+              "git checkout [name]",
+              "```",
+              "",
+              "This will put us on the new branch before committing our changes"
+            ],
+            "afterMarkdowns": [
+              "There we go! Our changes were recorded on the new branch"
+            ],
+            "command": "git checkout newImage; git commit",
+            "beforeCommand": "git branch newImage"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "Ok! You are all ready to get branching. Once this window closes,",
+              "make a new branch named `bugFix` and switch to that branch"
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Gitのブランチ",
+              "",
+              "Gitではコミットだけでなく、ブランチもまた信じられないほど軽量です。ブランチとは単に特定のコミットを指示したポインタにしか過ぎません。Gitの達人は決まってこう言うのは、そのためです：",
+              "",
+              "```",
+              "早めに、かつ頻繁にブランチを切りなさい",
+              "```",
+              "",
+              "どれほど多くのブランチを作ってもストレージやメモリを全然使わないので、ブランチを肥大化させるよりも論理的に分割していく方が簡単なのです。",
+              "",
+              "ブランチとコミットをあわせて使い始めると、これら2つのフィーチャがどのように連動して機能するかがわかるでしょう。ここではとりあえず、ブランチは基本的には「あるコミットとその親のコミットたちを含めた全てのコミット」のことを呼ぶと覚えておいてください。"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "では実際にブランチがどのようなものかを見ていきましょう。",
+              "",
+              "`newImage`という名前の新しいブランチを切ってみることにします。"
+            ],
+            "afterMarkdowns": [
+              "以上。必要な手順はこれだけです。いま作成された`newImage`ブランチは`C1`コミットを指しています。"
+            ],
+            "command": "git branch newImage",
+            "beforeCommand": ""
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "この新しいブランチに何か変更を加えてみましょう。次のボタンを押してください。"
+            ],
+            "afterMarkdowns": [
+              "あれ？`newImage`ではなくて`master`ブランチが移動してしまいました。これは、私たちが`newImage`のブランチ上で作業していなかったためです。どのブランチで作業しているかは、アスタリスク(*)がついてるかどうかで分かります。"
+            ],
+            "command": "git commit",
+            "beforeCommand": "git branch newImage"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "今度は作業したいブランチ名をgitに伝えてみましょう。",
+              "",
+              "```",
+              "git checkout [ブランチ名]",
+              "```",
+              "",
+              "このようにして、コミットする前に新しいブランチへと作業ブランチを移動することができます。"
+            ],
+            "afterMarkdowns": [
+              "できましたね。今度は新しいブランチに対して変更を記録することができました。"
+            ],
+            "command": "git checkout newImage; git commit",
+            "beforeCommand": "git branch newImage"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "OK! もうどんなブランチでも切れますね。このウィンドウを閉じて、",
+              "`bugFix`という名前のブランチを作成し、そのブランチをチェックアウトしてみましょう。"
+            ]
+          }
+        }
+      ]
+    },
+    "fr_FR": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Branches Git",
+              "",
+              "Les branches sous Git sont incroyablement légères aussi. Elles sont simplment des références un commit spécifique -- rien de plus. C'est pourquoi beaucoup d'enthousiastes répètent en cœur :",
+              "",
+              "```",
+              "n'attendez pas pour faire des branches, et faites souvent des branches",
+              "```",
+              "",
+              "Parce qu'il n'y a pas de surcoût (stockage/mémoire) associés aux branches, il est facile de diviser son travail en de nombreuses branches plutôt que d'avoir quelques grosses branches.",
+              "",
+              "Nous verrons comment les banches et les commits interagissent quand nous les utiliserons ensemble. Pour l'instant, souvenez-vous qu'une branche est un moyen d'exprimer \"Je veux inclure le contenu de ce commit et de tous les commits parents.\""
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "Regardons à quoi ressemblent les branches en pratique.",
+              "",
+              "Nous allons nous positionner (checkout) dans une nouvelle branche appellée `newImage`"
+            ],
+            "afterMarkdowns": [
+              "Et voilà, c'est tout ! La branche `newImage` se réfère désormais au commit `C1`"
+            ],
+            "command": "git branch newImage",
+            "beforeCommand": ""
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "Travaillons mainenant dans cette branche. Appuyez sur le bouton ci-dessous."
+            ],
+            "afterMarkdowns": [
+              "Oh non! La branche `master` a bougé mais pas la branche `newImage` ! C'est parce aue nous n'étions pas  \"sur\" la nouvelle branche, comme indiqué par l'asterisque (*) sur `master`"
+            ],
+            "command": "git commit",
+            "beforeCommand": "git branch newImage"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "Indiquons à git que nous voulons nous positionner sur la branche avec ",
+              "",
+              "```",
+              "git checkout [nom]",
+              "```",
+              "",
+              "Ceci nous positionne sur la nouvelle branche avant de faire un commit avec nos modifications"
+            ],
+            "afterMarkdowns": [
+              "C'est parti ! Nos modifications ont été enregistrées sur la nouvelle branche"
+            ],
+            "command": "git checkout newImage; git commit",
+            "beforeCommand": "git branch newImage"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "Ok! Vous êtes fin prêt pour faire des branches. Après la fermeture de cette fenêtre,",
+              "faites une nouvelle branche nommée `bugFix` et positionnez-vous sur cette branche"
+            ]
+          }
+        }
+      ]
+    },
+    "zh_CN": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Git Branches",
+              "",
+              " Git 的分支非常轻量。它们只是简单地指向某个提交纪录——仅此而已。所以许多Git爱好者会念叨：",
+              "",
+              "```",
+              "早点建分支！经常建分支！",
+              "```",
+              "",
+              "创建分支没有储存或内存上的开销，所以按逻辑分解工作比维护单一的代码树要简单。",
+              "",
+              "同时使用分支和提交时，我们会看到两者如何配合。现在，只要记住使用分支其实就是在说：“我想包含本次提交及所有的父提交记录。”"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "举个例子看看分支究竟是什么。",
+              "",
+              "这里，我们切换到到名为`newImage`的新分支。"
+            ],
+            "command": "git branch newImage",
+            "afterMarkdowns": [
+              "看，这就是建立分支所需的操作啦！`newImage`分支现在指向提交记录`C1`。"
+            ],
+            "beforeCommand": ""
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "现在让我们修改一下新分支。点击下面的按钮。"
+            ],
+            "command": "git commit",
+            "afterMarkdowns": [
+              "啊摔！`master`分支前进了，但`newImage`分支没有哇！这是因为我们没有“在”这个新分支上，这也是为什么星号（*）只在 `master` 上。"
+            ],
+            "beforeCommand": "git branch newImage"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "使用如下命令告诉git我们想要切换到新的分支",
+              "",
+              "```",
+              "git checkout [name]",
+              "```",
+              "",
+              "这可以让我们在提交修改之前切换到新的分支。"
+            ],
+            "command": "git checkout newImage; git commit",
+            "afterMarkdowns": [
+              "好的嘞！新的分支已经记录了我们的修改。"
+            ],
+            "beforeCommand": "git branch newImage"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "好啦，你已经准备好使用分支了。当前窗口关闭后，",
+              "创建一个叫 `bugFix` 的新分支，然后切换过去。"
+            ]
+          }
+        }
+      ]
+    },
+    "ko": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Git 브랜치",
+              "",
+              "깃의 브랜치도 놀랍도록 가볍습니다. 브랜치는 특정 커밋에 대한 참조(reference)에 지나지 않습니다. 이런 사실 때문에 수많은 Git 애찬론자들이 자주 이렇게 말하곤 합니다:",
+              "",
+              "```",
+              "브랜치를 서둘러서, 그리고 자주 만드세요",
+              "```",
+              "",
+              "브랜치를 많이 만들어도 메모리나 디스크 공간에 부담이 되지 않기 때문에, 여러분의 작업을 커다른 브랜치로 만들기 보다, 작은 단위로 잘게 나누는 것이 좋습니다.",
+              "",
+              "브랜치와 커밋을 같이 쓸 때, 어떻게 두 기능이 조화를 이루는지 알아보겠습니다. 하지만 우선은, 단순히 브랜치를 \"하나의 커밋과 그 부모 커밋들을 포함하는 작업 내역\"이라고 기억하시면 됩니다."
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "브랜치가 어떤 것인지 연습해보죠.",
+              "",
+              "`newImage`라는 브랜치를 살펴보겠습니다."
+            ],
+            "afterMarkdowns": [
+              "저 그림에 브랜치의 모든 것이 담겨있습니다! 브랜치 `newImage`가 커밋 `C1`를 가리킵니다"
+            ],
+            "command": "git branch newImage",
+            "beforeCommand": ""
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "이 새로운 브랜치에 약간의 작업을 더해봅시다. 아래 버튼을 눌러주세요"
+            ],
+            "afterMarkdowns": [
+              "앗! `master` 브랜치가 움직이고, `newImage` 브랜치는 이동하지 않았네요! 그건 우리가 새 브랜치 위에 있지 않았었기 때문입니다. 별표(*)가 `master`에 있었던 것이죠."
+            ],
+            "command": "git commit",
+            "beforeCommand": "git branch newImage"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "아래의 명령으로 새 브랜치로 이동해 봅시다.",
+              "",
+              "```",
+              "git checkout [브랜치명]",
+              "```",
+              "",
+              "이렇게 하면 변경분을 커밋하기 전에 새 브랜치로 이동하게 됩니다."
+            ],
+            "afterMarkdowns": [
+              "이거죠! 이제 우리의 변경이 새 브랜치에 기록되었습니다!"
+            ],
+            "command": "git checkout newImage; git commit",
+            "beforeCommand": "git branch newImage"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "좋아요! 이제 직접 브랜치 작업을 연습해봅시다. 이 창을 닫고,",
+              "`bugFix`라는 새 브랜치를 만드시고, 그 브랜치로 이동해보세요"
+            ]
+          }
+        }
+      ]
+    }
+  }
+};
+
+});
+require("/src/levels/intro/branching.js");
+
+require.define("/src/levels/intro/commits.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "name": {
     "en_US": "Introduction to Git Commits",
     "fr_FR": "Introduction aux commits avec Git",
+    "ja": "Gitのコミット",
     'ko': 'Git 커밋 소개',
-    'zh_CN': '介绍Git提交'
+    'zh_CN': 'Git Commits简介'
   },
   "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C3\",\"id\":\"master\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C2\"],\"id\":\"C3\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
   "solutionCommand": "git commit;git commit",
@@ -31398,6 +33718,7 @@ require.define("/src/levels/intro/1.js",function(require,module,exports,__dirnam
     "en_US": "Just type in 'git commit' twice to finish!",
     "fr_FR": "Il suffit de saisir 'git commit' deux fois pour réussir !",
     "zh_CN": "敲两次 'git commit' 就好啦！",
+    "ja": "'git commit'コマンドを2回打てば完成!",
     "ko": "'git commit'이라고 두 번 치세요!"
   },
   "disabledMap": {
@@ -31445,6 +33766,52 @@ require.define("/src/levels/intro/1.js",function(require,module,exports,__dirnam
           "options": {
             "markdowns": [
               "Go ahead and try it out on your own! After this window closes, make two commits to complete the level"
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Gitのコミット",
+              "コミットによって、ディレクトリ中の全てのファイルのスナップショットを記録します。巨大なコピー＆ペーストのようなものですが、実はそれよりずっと良いものです。",
+              "",
+              "Gitではコミットを可能な限り軽量に保つために、コミット毎にフォルダ全体をコピーしません。実際にはGitは、コミットを直前のバージョンから一つ先のバージョンへの「変更の固まり」あるいは「差分」として記録します。後で出てきますが、ほとんどのコミットが親を持っているのはそういう理由からです。",
+              "",
+              "リポジトリをcloneする時には、内部動作としてはコミットの差分をたどって全ての変更を取得しています。cloneした時に以下のような表示が出るのは：",
+              "",
+              "`resolving deltas`（訳：差分を解決中）",
+              "",
+              "このためです。",
+              "",
+              "もっと説明したいところですが、しばらくはコミットをスナップショットのようなものだと考えてください。コミットは非常に軽量であり、コミット間の移動も非常に高速です。"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "これがどういうことか、動きを見ていきましょう。図には（小さな）gitリポジトリが描かれています。コミットが2つあります ― `C0`という名前の初回のコミットがあり、`C1`という名前の次のコミットが続きます。これは何か意味のある変更かもしれません。",
+              "",
+              "下のボタンを押下して新しいコミットを作ってみましょう。"
+            ],
+            "afterMarkdowns": [
+              "できました! 良いですね。いまリポジトリに新しい変更が加えられ、1つのコミットとして保存されました。作成したコミットには親がいて、このコミットの出発点となった`C1`を指しています。"
+            ],
+            "command": "git commit",
+            "beforeCommand": ""
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "実際に手を動かしてみましょう。このウィンドウを閉じたら、試しに2回コミットをしてみましょう。"
             ]
           }
         }
@@ -31547,15 +33914,15 @@ require.define("/src/levels/intro/1.js",function(require,module,exports,__dirnam
           "options": {
             "markdowns": [
               "## Git Commits",
-              "在一个使用 git 进行版本控制的仓库里，一次提交（commit）给你目录下所有文件做了一次快照，就好像是做了一次复制粘贴，但 git 做的不只那么简单！",
+              "git仓库中的一次提交（commit）记录目录下所有文件的快照。感觉像是大量的复制和粘贴，但 git 做的不只这么简单！",
               "",
-              "Git 希望尽可能地让这些提交记录保持轻量，所以每次在你进行提交的时候，它不会就这么复制整个工作目录。实际上它把每次提交都记录为一个相对于上个版本变化的集合，或者说一个\"差异 （delta）\"集。这也是为什么绝大部分提交都有一个父对象（parent commit） -- 迟点你就会在我们的演示中看见了。",
+              "Git 希望提交记录尽可能地轻量，所以每次进行提交时，它不会简单地复制整个目录。实际上它把每次提交记录保存为从代码库的一个版本到下一个版本的变化集，或者说一个\"增量（delta）\"。所以，大部分提交记录都有一个父提交（parent commit）-- 我们会很快演示这一点。",
               "",
-              "假如你要克隆（clone）一个仓库，你就要去解包（unpack）或者“解决（resolve）”这些差异。所以当你克隆一个仓库时会在命令行下看见这样的命令：",
+              "克隆（clone）代码库时，需要解包（unpack）或者“解析（resolve）”所有的差异。所以在克隆代码库时，可能会看见如下命令行输出：",
               "",
               "`resolving deltas`",
               "",
-              "要完全理解这些概念可能要花费很多时间，但现在你可以把提交看作是项目的快照，提交非常轻量而且在它们之间切换的时候非常快。"
+              "要学的东西有很多，但现在你可以把提交记录看作是项目的快照。提交记录非常轻量且可以快速切换！"
             ]
           }
         },
@@ -31563,13 +33930,13 @@ require.define("/src/levels/intro/1.js",function(require,module,exports,__dirnam
           "type": "GitDemonstrationView",
           "options": {
             "beforeMarkdowns": [
-              "让我们在练习里好好了解提交是什么玩意。在右边展示的是一个使用 git 管理的（小）仓库。现在有两个提交 —— 一个是初始提交 `C0`，另外一个可能包含了一些有意义修改的提交是`C1`。",
+              "在实践中学习commit。右边是一个（小）git代码库的图示。当前有两个提交记录—— 初始提交`C0`和其后可能包含有用修改的提交`C1`。",
               "",
-              "点下面的按钮来生成一个新的提交。"
+              "点击下面的按钮生成新的提交记录。"
             ],
             "command": "git commit",
             "afterMarkdowns": [
-              "看！碉堡吧！我们刚刚对这个仓库进行了一点修改，并且把这些修改提交了。我们刚刚做的提交有一个爸爸（parent），叫 `C1`，代表这个修改是基于`C1`的。"
+              "看！碉堡吧！我们修改了代码，并保存为一次提交记录。刚刚做的提交`C2`有一个父提交（parent）`C1`，代表此次修改的基础。"
             ],
             "beforeCommand": ""
           }
@@ -31578,7 +33945,7 @@ require.define("/src/levels/intro/1.js",function(require,module,exports,__dirnam
           "type": "ModalAlert",
           "options": {
             "markdowns": [
-              "接下来你可以继续尝试下。在这个窗口关闭之后，提交两遍就可以过关！"
+              "接下来你可以随便测试。当前窗口关闭后，完成两次提交就可以过关！"
             ]
           }
         }
@@ -31588,358 +33955,23 @@ require.define("/src/levels/intro/1.js",function(require,module,exports,__dirnam
 };
 
 });
-require("/src/levels/intro/1.js");
+require("/src/levels/intro/commits.js");
 
-require.define("/src/levels/intro/2.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
-  "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C1\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C1\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"}},\"HEAD\":{\"target\":\"bugFix\",\"id\":\"HEAD\"}}",
-  "solutionCommand": "git branch bugFix;git checkout bugFix",
-  "name": {
-    "en_US": "Branching in Git",
-    "ko": "Git에서 브랜치 쓰기",
-    "fr_FR": "Gérer les branches avec Git",
-    "zh_CN": "Git开分支"
-  },
-  "hint": {
-    "en_US": "Make a new branch with \"git branch [name]\" and check it out with \"git checkout [name]\"",
-    "fr_FR": "Faites une nouvelle branche avec \"git branch [nom]\" positionnez-vous dans celle-ci avec \"git checkout [nom]\"",
-    "zh_CN": "用 'git branch [新分支名字]' 来创建新分支，并用 'git checkout [新分支]' 切换到新分支",
-    "ko": "\"git branch [브랜치명]\"으로 새 브랜치를 만들고, \"git checkout [브랜치명]\"로 그 브랜치로 이동하세요"
-  },
-  "disabledMap": {
-    "git revert": true
-  },
-  "startDialog": {
-    "en_US": {
-      "childViews": [
-        {
-          "type": "ModalAlert",
-          "options": {
-            "markdowns": [
-              "## Git Branches",
-              "",
-              "Branches in Git are incredibly lightweight as well. They are simply references to a specific commit -- nothing more. This is why many Git enthusiasts chant the mantra:",
-              "",
-              "```",
-              "branch early, and branch often",
-              "```",
-              "",
-              "Because there is no storage / memory overhead with making many branches, it's easier to logically divide up your work than have big beefy branches.",
-              "",
-              "When we start mixing branches and commits, we will see how these two features combine. For now though, just remember that a branch essentially says \"I want to include the work of this commit and all parent commits.\""
-            ]
-          }
-        },
-        {
-          "type": "GitDemonstrationView",
-          "options": {
-            "beforeMarkdowns": [
-              "Let's see what branches look like in practice.",
-              "",
-              "Here we will check out a new branch named `newImage`"
-            ],
-            "afterMarkdowns": [
-              "There, that's all there is to branching! The branch `newImage` now refers to commit `C1`"
-            ],
-            "command": "git branch newImage",
-            "beforeCommand": ""
-          }
-        },
-        {
-          "type": "GitDemonstrationView",
-          "options": {
-            "beforeMarkdowns": [
-              "Let's try to put some work on this new branch. Hit the button below"
-            ],
-            "afterMarkdowns": [
-              "Oh no! The `master` branch moved but the `newImage` branch didn't! That's because we weren't \"on\" the new branch, which is why the asterisk (*) was on `master`"
-            ],
-            "command": "git commit",
-            "beforeCommand": "git branch newImage"
-          }
-        },
-        {
-          "type": "GitDemonstrationView",
-          "options": {
-            "beforeMarkdowns": [
-              "Let's tell git we want to checkout the branch with",
-              "",
-              "```",
-              "git checkout [name]",
-              "```",
-              "",
-              "This will put us on the new branch before committing our changes"
-            ],
-            "afterMarkdowns": [
-              "There we go! Our changes were recorded on the new branch"
-            ],
-            "command": "git checkout newImage; git commit",
-            "beforeCommand": "git branch newImage"
-          }
-        },
-        {
-          "type": "ModalAlert",
-          "options": {
-            "markdowns": [
-              "Ok! You are all ready to get branching. Once this window closes,",
-              "make a new branch named `bugFix` and switch to that branch"
-            ]
-          }
-        }
-      ]
-    },
-    "fr_FR": {
-      "childViews": [
-        {
-          "type": "ModalAlert",
-          "options": {
-            "markdowns": [
-              "## Branches Git",
-              "",
-              "Les branches sous Git sont incroyablement légères aussi. Elles sont simplment des références un commit spécifique -- rien de plus. C'est pourquoi beaucoup d'enthousiastes répètent en cœur :",
-              "",
-              "```",
-              "n'attendez pas pour faire des branches, et faites souvent des branches",
-              "```",
-              "",
-              "Parce qu'il n'y a pas de surcoût (stockage/mémoire) associés aux branches, il est facile de diviser son travail en de nombreuses branches plutôt que d'avoir quelques grosses branches.",
-              "",
-              "Nous verrons comment les banches et les commits interagissent quand nous les utiliserons ensemble. Pour l'instant, souvenez-vous qu'une branche est un moyen d'exprimer \"Je veux inclure le contenu de ce commit et de tous les commits parents.\""
-            ]
-          }
-        },
-        {
-          "type": "GitDemonstrationView",
-          "options": {
-            "beforeMarkdowns": [
-              "Regardons à quoi ressemblent les branches en pratique.",
-              "",
-              "Nous allons nous positionner (checkout) dans une nouvelle branche appellée `newImage`"
-            ],
-            "afterMarkdowns": [
-              "Et voilà, c'est tout ! La branche `newImage` se réfère désormais au commit `C1`"
-            ],
-            "command": "git branch newImage",
-            "beforeCommand": ""
-          }
-        },
-        {
-          "type": "GitDemonstrationView",
-          "options": {
-            "beforeMarkdowns": [
-              "Travaillons mainenant dans cette branche. Appuyez sur le bouton ci-dessous."
-            ],
-            "afterMarkdowns": [
-              "Oh non! La branche `master` a bougé mais pas la branche `newImage` ! C'est parce aue nous n'étions pas  \"sur\" la nouvelle branche, comme indiqué par l'asterisque (*) sur `master`"
-            ],
-            "command": "git commit",
-            "beforeCommand": "git branch newImage"
-          }
-        },
-        {
-          "type": "GitDemonstrationView",
-          "options": {
-            "beforeMarkdowns": [
-              "Indiquons à git que nous voulons nous positionner sur la branche avec ",
-              "",
-              "```",
-              "git checkout [nom]",
-              "```",
-              "",
-              "Ceci nous positionne sur la nouvelle branche avant de faire un commit avec nos modifications"
-            ],
-            "afterMarkdowns": [
-              "C'est parti ! Nos modifications ont été enregistrées sur la nouvelle branche"
-            ],
-            "command": "git checkout newImage; git commit",
-            "beforeCommand": "git branch newImage"
-          }
-        },
-        {
-          "type": "ModalAlert",
-          "options": {
-            "markdowns": [
-              "Ok! Vous êtes fin prêt pour faire des branches. Après la fermeture de cette fenêtre,",
-              "faites une nouvelle branche nommée `bugFix` et positionnez-vous sur cette branche"
-            ]
-          }
-        }
-      ]
-    },
-    "zh_CN": {
-      "childViews": [
-        {
-          "type": "ModalAlert",
-          "options": {
-            "markdowns": [
-              "## Git Branches",
-              "",
-              "在 Git 里面，分支也是非常轻量。它们实际上就是对特定的提交的一个简单参照（reference） —— 对，就是那么简单。所以许多鼓吹 Git 的玩家会反复吟诵这么一句咒语：",
-              "",
-              "```",
-              "早点开分支！多点开分支！（branch early, and branch often）",
-              "```",
-              "",
-              "因为创建分支不会带来任何储存（硬盘和内存）上的开销，所以你大可以根据需要将你的工作划分成几个分支，而不是使用只使用一个巨大的分支（beefy）。",
-              "",
-              "当我们开始将分支和提交混合一起使用之后，将会看见两者混合所带来的特性。从现在开始，只要记住使用分支其实就是在说：“我想把这次提交和它的父提交都包含进去。（I want to include the work of this commit and all parent commits.）”"
-            ]
-          }
-        },
-        {
-          "type": "GitDemonstrationView",
-          "options": {
-            "beforeMarkdowns": [
-              "让我们在实践中看看分支究竟是怎样的。",
-              "",
-              "现在我们会检出（check out）到一个叫 `newImage` 的新分支。"
-            ],
-            "command": "git branch newImage",
-            "afterMarkdowns": [
-              "看，这就是分支啦！`newImage` 这个分支现在是指向提交 `C1`。"
-            ],
-            "beforeCommand": ""
-          }
-        },
-        {
-          "type": "GitDemonstrationView",
-          "options": {
-            "beforeMarkdowns": [
-              "现在让我们往这个新分支里添加一点修改。按一下下面的按钮。"
-            ],
-            "command": "git commit",
-            "afterMarkdowns": [
-              "啊摔！`master` 分支前进了，但是 `newImage` 分支没有哇！这是因为我们没有“在”这个新分支上，这也是为什么星号（*）只在 `master` 上。"
-            ],
-            "beforeCommand": "git branch newImage"
-          }
-        },
-        {
-          "type": "GitDemonstrationView",
-          "options": {
-            "beforeMarkdowns": [
-              "要切换到一个分支，我们可以这样告诉 git",
-              "",
-              "```",
-              "git checkout [name]",
-              "```",
-              "",
-              "这样就可以让我们在提交修改之前切换到新的分支了。"
-            ],
-            "command": "git checkout newImage; git commit",
-            "afterMarkdowns": [
-              "好的嘞！我们的修改已经记录在新的分支里了。"
-            ],
-            "beforeCommand": "git branch newImage"
-          }
-        },
-        {
-          "type": "ModalAlert",
-          "options": {
-            "markdowns": [
-              "好啦，现在你可以准备使用分支了。这个窗口关闭以后，",
-              "创建一个叫 `bugFix` 的新分支，然后切换到那里。"
-            ]
-          }
-        }
-      ]
-    },
-    "ko": {
-      "childViews": [
-        {
-          "type": "ModalAlert",
-          "options": {
-            "markdowns": [
-              "## Git 브랜치",
-              "",
-              "깃의 브랜치도 놀랍도록 가볍습니다. 브랜치는 특정 커밋에 대한 참조(reference)에 지나지 않습니다. 이런 사실 때문에 수많은 Git 애찬론자들이 자주 이렇게 말하곤 합니다:",
-              "",
-              "```",
-              "브랜치를 서둘러서, 그리고 자주 만드세요",
-              "```",
-              "",
-              "브랜치를 많이 만들어도 메모리나 디스크 공간에 부담이 되지 않기 때문에, 여러분의 작업을 커다른 브랜치로 만들기 보다, 작은 단위로 잘게 나누는 것이 좋습니다.",
-              "",
-              "브랜치와 커밋을 같이 쓸 때, 어떻게 두 기능이 조화를 이루는지 알아보겠습니다. 하지만 우선은, 단순히 브랜치를 \"하나의 커밋과 그 부모 커밋들을 포함하는 작업 내역\"이라고 기억하시면 됩니다."
-            ]
-          }
-        },
-        {
-          "type": "GitDemonstrationView",
-          "options": {
-            "beforeMarkdowns": [
-              "브랜치가 어떤 것인지 연습해보죠.",
-              "",
-              "`newImage`라는 브랜치를 살펴보겠습니다."
-            ],
-            "afterMarkdowns": [
-              "저 그림에 브랜치의 모든 것이 담겨있습니다! 브랜치 `newImage`가 커밋 `C1`를 가리킵니다"
-            ],
-            "command": "git branch newImage",
-            "beforeCommand": ""
-          }
-        },
-        {
-          "type": "GitDemonstrationView",
-          "options": {
-            "beforeMarkdowns": [
-              "이 새로운 브랜치에 약간의 작업을 더해봅시다. 아래 버튼을 눌러주세요"
-            ],
-            "afterMarkdowns": [
-              "앗! `master` 브랜치가 움직이고, `newImage` 브랜치는 이동하지 않았네요! 그건 우리가 새 브랜치 위에 있지 않았었기 때문입니다. 별표(*)가 `master`에 있었던 것이죠."
-            ],
-            "command": "git commit",
-            "beforeCommand": "git branch newImage"
-          }
-        },
-        {
-          "type": "GitDemonstrationView",
-          "options": {
-            "beforeMarkdowns": [
-              "아래의 명령으로 새 브랜치로 이동해 봅시다.",
-              "",
-              "```",
-              "git checkout [브랜치명]",
-              "```",
-              "",
-              "이렇게 하면 변경분을 커밋하기 전에 새 브랜치로 이동하게 됩니다."
-            ],
-            "afterMarkdowns": [
-              "이거죠! 이제 우리의 변경이 새 브랜치에 기록되었습니다!"
-            ],
-            "command": "git checkout newImage; git commit",
-            "beforeCommand": "git branch newImage"
-          }
-        },
-        {
-          "type": "ModalAlert",
-          "options": {
-            "markdowns": [
-              "좋아요! 이제 직접 브랜치 작업을 연습해봅시다. 이 창을 닫고,",
-              "`bugFix`라는 새 브랜치를 만드시고, 그 브랜치로 이동해보세요"
-            ]
-          }
-        }
-      ]
-    }
-  }
-};
-
-});
-require("/src/levels/intro/2.js");
-
-require.define("/src/levels/intro/3.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
-  "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C4\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C2\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C2\",\"C3\"],\"id\":\"C4\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
+require.define("/src/levels/intro/merging.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+  "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C4\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C2\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C3\",\"C2\"],\"id\":\"C4\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
   "solutionCommand": "git checkout -b bugFix;git commit;git checkout master;git commit;git merge bugFix",
   "name": {
     "en_US": "Merging in Git",
     "fr_FR": "Faire des 'merge' (fusions de branches) avec Git",
     "ko": "Git에서 브랜치 합치기(Merge)",
-    "zh_CN": "Git合并(Merge)"
+    "ja": "ブランチとマージ",
+    "zh_CN": "分支与合并"
   },
   "hint": {
     "en_US": "Remember to commit in the order specified (bugFix before master)",
+    "ja": "指示された順番でコミットすること（masterの前にbugFixで）",
     "fr_FR": "Pensez à faire des commits dans l'ordre indiqué (bugFix avant master)",
-    "zh_CN": "记得按照给定的顺序来进行提交(commit) （bugFix 要在 master 之前）",
+    "zh_CN": "记住按指定的顺序提交（bugFix先于master）",
     "ko": "말씀드린 순서대로 커밋해주세요 (bugFix에 먼저 커밋하고 master에 커밋)"
   },
   "disabledMap": {
@@ -31990,7 +34022,7 @@ require.define("/src/levels/intro/3.js",function(require,module,exports,__dirnam
             "afterMarkdowns": [
               "Since `bugFix` was downstream of `master`, git didn't have to do any work; it simply just moved `bugFix` to the same commit `master` was attached to.",
               "",
-              "Now all the commits are the same color, which means each branch contains all the work in the repository! Woohoo"
+              "Now all the commits are the same color, which means each branch contains all the work in the repository! Woohoo!"
             ],
             "command": "git checkout bugFix; git merge master",
             "beforeCommand": "git checkout -b bugFix; git commit; git checkout master; git commit; git merge bugFix"
@@ -32010,6 +34042,75 @@ require.define("/src/levels/intro/3.js",function(require,module,exports,__dirnam
               "* Merge the branch `bugFix` into `master` with `git merge`",
               "",
               "*Remember, you can always re-display this dialog with \"help level\"!*"
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## ブランチとマージ",
+              "",
+              "いい調子ですね。これまでにコミットとブランチについて学びました。そろそろ2つのブランチを1つにまとめるやり方について見ていきましょう。これができれば新しいフィーチャの開発のために新しいブランチを切って、開発が終わったら変更を元のブランチへ統合することができるようになります。",
+              "",
+              "はじめに紹介するのは、`git merge`を使ったマージのやり方です。mergeコマンドによって、2つの独立した親を持つ特別なコミットを作ることができます。2つの親を持つコミットが持つ意味とは、「全く別々の場所にいるこの親とその親（*かつ*、それらの親の祖先全て）が持つ全ての変更を含んでいますよ」ということです。",
+              "",
+              "見てみた方が早いので、次の画面で確認してみましょう。"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "それぞれ別のコミットを指している2つのブランチがあります。変更が別々のブランチに分散していて統合されていないケースです。これをマージで1つにまとめてみましょう。",
+              "",
+              "`bugFix`ブランチを`master`ブランチにマージしてみます。"
+            ],
+            "afterMarkdowns": [
+              "わあ。見ましたか？まず初めに、`master`ブランチが2つのコミットを親に持つ新しいコミットを指してますね。`master`から親をたどっていくと、最も古いコミットにたどり着くまでに全てのコミットを含んでいる様が確認できます。これで、全ての変更を含む`master`が完成しました。",
+              "",
+              "色がどう変わったかにも注目して下さい。学習を助けるために、ブランチ毎に色をつけています。それぞれのブランチは自分の色を持っていて、どのブランチから派生して出てくるか次第でコミットごとの色が決まります。",
+              "",
+              "今回のコミットには`master`ブランチの色が使われました。しかし`bugFix`ブランチの色がまだ変わってないようなので、これを変えてみましょう。"
+            ],
+            "command": "git merge bugFix",
+            "beforeCommand": "git checkout -b bugFix; git commit; git checkout master; git commit"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "`master`ブランチを`bugFix`ブランチにマージしてみます。"
+            ],
+            "afterMarkdowns": [
+              "`bugFix`ブランチは`master`ブランチの派生元だったので、gitは実際大したことはしていません：`bugFix`ブランチを指していたポインタを`master`が指していたコミットへと移動させただけです。",
+              "",
+              "これで全てのコミットが同じ色になりました。つまり、リポジトリの中の全ての変更をそれぞれのブランチが持ったことになります。やったね！"
+            ],
+            "command": "git checkout bugFix; git merge master",
+            "beforeCommand": "git checkout -b bugFix; git commit; git checkout master; git commit; git merge bugFix"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "以下の作業で理解度の確認をしてみましょう。 steps:",
+              "",
+              "* `bugFix`という名前で新しいブランチを切る",
+              "* `git checkout bugFix`コマンドで`bugFix`ブランチをチェックアウトする",
+              "* 一回だけコミット",
+              "* `git checkout`で`master`へ戻る",
+              "* もう1回コミットする",
+              "* `git merge`コマンドを使って、`bugFix`ブランチを`master`ブランチへとマージする",
+              "",
+              "*注：\"help level\"コマンドでこのヘルプにいつでも戻ってこれます*"
             ]
           }
         }
@@ -32059,7 +34160,7 @@ require.define("/src/levels/intro/3.js",function(require,module,exports,__dirnam
             "afterMarkdowns": [
               "Puisque `bugFix` était un descendant de `master`, git n'avait aucun travail à effectuer; il a simplement déplacé `bugFix` au même commit auquel `master` est attaché.",
               "",
-              "Maintenant tous les commits sont de la même couleur, ce qui indique que chaque branche contient tout le contenu du dépôt ! Woohoo"
+              "Maintenant tous les commits sont de la même couleur, ce qui indique que chaque branche contient tout le contenu du dépôt ! Woohoo!"
             ],
             "command": "git checkout bugFix; git merge master",
             "beforeCommand": "git checkout -b bugFix; git commit; git checkout master; git commit; git merge bugFix"
@@ -32092,11 +34193,11 @@ require.define("/src/levels/intro/3.js",function(require,module,exports,__dirnam
             "markdowns": [
               "## Branches and Merging",
               "",
-              "Great! 现在我们已经知道怎么提交和使用分支了。接下来要学的一招是怎么把两个不同分支的工作合并起来。这样做是为了让我们在创建新的分支，开发新的东西之后，把新的东西合并回来。",
+              "Great! 我们已经知道怎么提交和使用分支了。接下来要学的一招是如何合并两个不同分支的工作。这让我们可以新建一个分支，在其上开发新功能，然后合并回主线。",
               "",
-              "我们将要学的第一个组合方法是 `git merge`。在 Git 里进行合并（Merging）会产生一个拥有两个各不相同的父提交的特殊提交（commit）。这个特殊提交本质上就是：“把这两个各不相同的父提交*以及*它们的父提交集合的所有内容都包含进来。”",
+              "`git merge`是我们要学习的合并工作的第一个方法。合并产生一个特殊的提交记录，它包含两个唯一父提交。有两个父提交的提交记录本质上是：“我想把这两个父提交本身及它们的父提交集合都包含进来。”",
               "",
-              "听起来可能有点拗口，看看下一张就明白了。"
+              "有图有真相，看看下面的图示就明白了。"
             ]
           }
         },
@@ -32104,17 +34205,17 @@ require.define("/src/levels/intro/3.js",function(require,module,exports,__dirnam
           "type": "GitDemonstrationView",
           "options": {
             "beforeMarkdowns": [
-              "现在我们有两个分支：每一个都有一个特有的提交。也就是说没有一个分支包含了仓库的所有工作。现在让我们用合并来将它们组合在一起吧。",
+              "当前有两个分支：各有一个唯一的提交。这意味着没有一个分支包含我们对代码库的所有修改。让我们合并这两个分支来解决这个问题。",
               "",
-              "我们将要把分支 `bugFix` 合并到 `master` 上"
+              "我们要把 `bugFix` 合并到 `master` "
             ],
             "command": "git merge bugFix",
             "afterMarkdowns": [
-              "哇！看见木有？`master` 分支现在指向了一个拥有两个爸爸的提交。假如你从 `master` 开始沿着箭头走到起点，沿路你可以遍历到所有的提交。这就表明 `master` 包含了仓库里所有的内容了。",
+              "哇！看见木有？首先，`master` 现在指向一个拥有两个父提交的提交记录。假如从 `master` 开始沿着箭头向上游走，在到达起点的路上会经过所有的提交记录。这说明有 `master` 包含了对代码库的所有修改。",
               "",
-              "还有，看见各个提交的颜色的变化了吗？为了帮助学习，我添加了一些颜色混合。每个分支都有特定的颜色。每个提交的颜色都是含有这个提交的分支的颜色的混合。",
+              "还有，看见各个提交记录的颜色变化了吗？为了帮助学习，我使用了颜色混合。每个分支都有特定的颜色。每个提交记录都变成了含有此提交的所有分支的混合色。",
               "",
-              "所以我们可以看见 `master` 分支的颜色是所有提交的颜色的混合，但是 `bugFix` 不是。接下来就改一下这里吧。"
+              "所以，`master` 分支的颜色被混入到所有的提交记录，但 `bugFix` 没有。接下来就改一下这里吧。"
             ],
             "beforeCommand": "git checkout -b bugFix; git commit; git checkout master; git commit"
           }
@@ -32127,9 +34228,9 @@ require.define("/src/levels/intro/3.js",function(require,module,exports,__dirnam
             ],
             "command": "git checkout bugFix; git merge master",
             "afterMarkdowns": [
-              "因为 `bugFix` 分支在 `master` 分支的上游，所以 git 不用做什么额外的工作，只要把 `master` 分支的最新提交移到 `bugFix` 分支就可以了。",
+              "因为 `bugFix` 分支在 `master` 分支的下游，git什么都不用做，只是简单地把`bugfix`分支移动到`master`指向的提交记录。",
               "",
-              "现在所有的提交的颜色都是一样的啦，这表明现在所有的分支都包含了仓库里所有的东西！走起！"
+              "现在所有的提交记录的颜色都是一样的啦，这表明每一个分支都包含了代码库的所有修改！走起！"
             ],
             "beforeCommand": "git checkout -b bugFix; git commit; git checkout master; git commit; git merge bugFix"
           }
@@ -32138,16 +34239,16 @@ require.define("/src/levels/intro/3.js",function(require,module,exports,__dirnam
           "type": "ModalAlert",
           "options": {
             "markdowns": [
-              "想刷过这关，要按照下面的步骤来：",
+              "想完成此关，执行收下操作：",
               "",
-              "* 创建一个叫 `bugFix` 的新分支",
-              "* 用 `git checkout bugFix` 切换到分支 `bugFix`",
-              "* 创建一个提交",
-              "* 再用 `git checkout` 切换回 `master` 上",
-              "* 创建另外一个提交",
-              "* 用 `git merge` 把分支 `bugFix` 合并进 `master` 里",
+              "* 创建新分支 `bugFix` ",
+              "* 用 `git checkout bugFix` 切换到 `bugFix`分支",
+              "* 提交一次",
+              "* 用 `git checkout` 切换回 `master` ",
+              "* 再提交一次",
+              "* 用 `git merge` 合并 `bugFix`分支进 `master`",
               "",
-              "*友情提示，可以使用 \"help level\" 命令来重新显示这个窗口哦！*"
+              "*记住，总是可以用 \"help level\" 命令来重新显示这个对话框！*"
             ]
           }
         }
@@ -32226,19 +34327,21 @@ require.define("/src/levels/intro/3.js",function(require,module,exports,__dirnam
 };
 
 });
-require("/src/levels/intro/3.js");
+require("/src/levels/intro/merging.js");
 
-require.define("/src/levels/intro/4.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/src/levels/intro/rebasing.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "goalTreeString": "%7B%22branches%22%3A%7B%22master%22%3A%7B%22target%22%3A%22C3%22%2C%22id%22%3A%22master%22%7D%2C%22bugFix%22%3A%7B%22target%22%3A%22C2%27%22%2C%22id%22%3A%22bugFix%22%7D%7D%2C%22commits%22%3A%7B%22C0%22%3A%7B%22parents%22%3A%5B%5D%2C%22id%22%3A%22C0%22%2C%22rootCommit%22%3Atrue%7D%2C%22C1%22%3A%7B%22parents%22%3A%5B%22C0%22%5D%2C%22id%22%3A%22C1%22%7D%2C%22C2%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C2%22%7D%2C%22C3%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C3%22%7D%2C%22C2%27%22%3A%7B%22parents%22%3A%5B%22C3%22%5D%2C%22id%22%3A%22C2%27%22%7D%7D%2C%22HEAD%22%3A%7B%22target%22%3A%22bugFix%22%2C%22id%22%3A%22HEAD%22%7D%7D",
   "solutionCommand": "git checkout -b bugFix;git commit;git checkout master;git commit;git checkout bugFix;git rebase master",
   "name": {
     "en_US": "Rebase Introduction",
+    "ja": "Rebaseの解説",
     "fr_FR": "Introduction à rebase",
     "ko": "리베이스(rebase)의 기본",
-    "zh_CN": "介绍衍合(rebase)"
+    "zh_CN": "Rebase简介"
   },
   "hint": {
     "en_US": "Make sure you commit from bugFix first",
+    "ja": "初めにbugFixを指した状態でコミットする",
     "fr_FR": "Assurez-vous de bien faire votre en premier votre commit sur bugFix",
     "ko": "bugFix 브랜치에서 먼저 커밋하세요",
     "zh_CN": "确保你先在 bugFix 分支进行提交"
@@ -32309,6 +34412,73 @@ require.define("/src/levels/intro/4.js",function(require,module,exports,__dirnam
               "* Check out bugFix again and rebase onto master",
               "",
               "Good luck!"
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Git Rebase",
+              "",
+              "ブランチを一つにまとめる方法として前回はマージを紹介しましたが、今回紹介するリベースを使うこともできます。リベースの動作は、マージするコミットのコピーをとって、どこかにストンと落とすというイメージです。",
+              "",
+              "ピンと来ないかもしれませんが、リベースのメリットは一本の連続したシーケンシャルなコミットに整形できることです。リベースだけ使っていると、コミットのログや履歴が非常にクリーンな状態に保たれます。",
+              "",
+              "早速実際にどう動くのかを見てみましょう。"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "前回と同様の2つのブランチを考えます：仮にいまbugFixブランチをチェックアウトしているとします。（アスタリスクつきのもの）",
+              "",
+              "bugFixに入ってる作業内容をそのまま直接masterブランチ上の内容に移動したいとします。こうすることで、実際には並行して開発された2つの別々のブランチ上のフィーチャを、あたかも1本のブランチ上でシーケンシャルに開発されていたかのように見せることができます。",
+              "",
+              "`git rebase`コマンドでそれをやってみましょう。"
+            ],
+            "afterMarkdowns": [
+              "できた！これでbugFixブランチの作業内容はmasterブランチのすぐ先に移動したので、見た目が一本になってスッキリしました。",
+              "",
+              "気を付けてほしいのは、C3コミットはどこかに残ってるということ（ツリーの中で半透明にしてあります）、そしてC3'は（C3との接続が切れているC3の）コピーがmasterブランチ上に作られているということです。",
+              "",
+              "一つ問題が残ってて、masterブランチがまだ最新化されていませんね。ちょっと直してみましょう。。"
+            ],
+            "command": "git rebase master",
+            "beforeCommand": "git commit; git checkout -b bugFix C1; git commit"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "masterブランチはチェックアウトしてあります。この状態からmasterブランチを`bugFix`へとリベースしてみましょう。"
+            ],
+            "afterMarkdowns": [
+              "できた！`master`は`bugFix`の直前のコミットだったので、gitは単純に`master`ブランチのポインタを前に進めただけでした。"
+            ],
+            "command": "git rebase bugFix",
+            "beforeCommand": "git commit; git checkout -b bugFix C1; git commit; git rebase master; git checkout master"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "以下の作業で理解度の確認をしてみましょう。",
+              "",
+              "* `bugFix`という名前の新しいブランチをチェックアウトする",
+              "* 一回だけコミット",
+              "* masterブランチに戻ってもう1回コミット",
+              "* bugFixをもう1回チェックアウトして、master上にリベース",
+              "",
+              "幸運を祈る！"
             ]
           }
         }
@@ -32387,9 +34557,9 @@ require.define("/src/levels/intro/4.js",function(require,module,exports,__dirnam
             "markdowns": [
               "## Git Rebase",
               "",
-              "第二种合并不用分支工作的方法是 *衍合（rebasing）*。衍合就是取出一系列的提交，\"组合（compies）\"它们，然后把它们在某个地方重新放下来（重新实施一遍）。",
+              "*rebasing*是在分支之间合并工作的第二种方法。Rebasing就是取出一系列的提交记录，\"复制\"它们，然后把在别的某个地方放下来。",
               "",
-              "这可能看上去很难明白，而衍合的最大好处就是可以用来创造更线性的提交历史。假如一个项目只允许使用衍合（来合并工作），那么它的提交记录/历史会变得好看很多。",
+              "虽然听上去难以理解，rebasing 的优势是可以创造更线性的提交历史。假如只允许使用rebasing，代码库的提交日志/历史会更好看。",
               "",
               "让我们亲身体会下……"
             ]
@@ -32399,19 +34569,19 @@ require.define("/src/levels/intro/4.js",function(require,module,exports,__dirnam
           "type": "GitDemonstrationView",
           "options": {
             "beforeMarkdowns": [
-              "现在我们有两个分支，注意当前分支是 bugFix（看那颗星）",
+              "这里，还是有两个分支；注意当前分支是 bugFix（看那颗星）",
               "",
-              "我们想要把 bugfix 里面的工作直接移到 master 分支上。使用这个方法会让我们觉得这两个特性分支的工作是顺序提交的，但实际上它们是平行发展提交的。",
+              "我们想要把 bugfix 里面的工作直接移到 master 分支上。使用这个方法，两个分支的功能看起来像是按顺序开发，实际上它们是平行开发的。",
               "",
-              "要做到这个效果，我们用 `git rebase`"
+              "用 `git rebase`实现此目标"
             ],
             "command": "git rebase master",
             "afterMarkdowns": [
-              "碉堡吧，现在我们在 bugFix 分支上的工作已经移到了 master 的最前端，同时我们也得到了一个很好的直线型提交历史。",
+              "碉堡吧，现在 bugFix 分支上的工作在 master 的最前端，同时我们也得到了一个更线性的提交序列。",
               "",
-              "注意一下提交 C3 其实还存在在我们的仓库的某个角落里（阴影的那货就是你了，还看什么看），而 C3' 是它一个在 master 分支上的\"拷贝\"提交。",
+              "注意，提交记录 C3 仍然存在（阴影的那货就是你了，还看什么看），而我们已经将 C3 复制到了master。",
               "",
-              "现在还有唯一一个问题就是 master 分支还没有更新……下面就来更新它吧"
+              "现在唯一的问题是 master 分支还没有更新……下面就来更新它吧"
             ],
             "beforeCommand": "git commit; git checkout -b bugFix C1; git commit"
           }
@@ -32420,11 +34590,11 @@ require.define("/src/levels/intro/4.js",function(require,module,exports,__dirnam
           "type": "GitDemonstrationView",
           "options": {
             "beforeMarkdowns": [
-              "现在我们可以切换到了 `master` 分支。接下来就把它衍合到 `bugFix` 吧……"
+              "现在，切换到 `master` 分支。接下来就把它 rebase 到 `bugFix` 吧……"
             ],
             "command": "git rebase bugFix",
             "afterMarkdowns": [
-              "看！因为 `master` 是 `bugFix` 的上游，所以 git 只把 `master` 分支的记录前进到 `bugFix` 上。"
+              "完成！因为 `master` 是 `bugFix` 的下游，所以 git 只把 `master` 分支的记录前移到 `bugFix` 上。"
             ],
             "beforeCommand": "git commit; git checkout -b bugFix C1; git commit; git rebase master; git checkout master"
           }
@@ -32433,12 +34603,12 @@ require.define("/src/levels/intro/4.js",function(require,module,exports,__dirnam
           "type": "ModalAlert",
           "options": {
             "markdowns": [
-              "想刷过这关，要按照下面的步骤来：",
+              "想完成此关，执行以下操作：",
               "",
-              "* 切换到一个叫 `bugFix` 的新分支",
-              "* 创建一个提交",
-              "* 回到 master 分支并且创建另外一个提交",
-              "* 再次切换到 bugFix 分支，然后把它衍合到 master 上",
+              "* 新建`bugFix`分支",
+              "* 提交一次",
+              "* 切换回 master 分支再提交一次",
+              "* 再次切换到 bugFix 分支，rebase 到 master 上",
               "",
               "祝你好运啦！"
             ]
@@ -32517,9 +34687,9 @@ require.define("/src/levels/intro/4.js",function(require,module,exports,__dirnam
 };
 
 });
-require("/src/levels/intro/4.js");
+require("/src/levels/intro/rebasing.js");
 
-require.define("/src/levels/mixed/1.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/src/levels/mixed/grabbingOneCommit.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "compareOnlyMasterHashAgnosticWithAsserts": true,
   "goalAsserts": {
     "master": [
@@ -32537,10 +34707,12 @@ require.define("/src/levels/mixed/1.js",function(require,module,exports,__dirnam
   "name": {
     "ko": "딱 한개의 커밋만 가져오기",
     "en_US": "Grabbing Just 1 Commit",
+    "ja": "Grabbing Just 1 Commit",
     "zh_CN": "私藏一个提交"
   },
   "hint": {
     "en_US": "Remember, interactive rebase or cherry-pick is your friend here",
+    "ja": "このレベルではインタラクティブモードのrebaseやcherry-pickがクリアのカギです",
     "ko": "대화식 리베이스(rebase -i)나 or 체리픽(cherry-pick)을 사용하세요",
     "zh_CN": "记住，交互式 rebase 或者 cherry-pick 会很有帮助"
   },
@@ -32581,6 +34753,47 @@ require.define("/src/levels/mixed/1.js",function(require,module,exports,__dirnam
           "options": {
             "markdowns": [
               "This is a later level so we will leave it up to you to decide, but in order to complete the level, make sure `master` receives the commit that `bugFix` references."
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## ローカルに積み上がったコミット",
+              "",
+              "実際の開発ではこういうケースがよくあります：「バグの原因調査を試みているがバグの再現性がかなり低い。調査の補助のために、いくつかのデバッグ用の命令やprint文を差し込んでいる。」",
+              "",
+              "これらのデバッグ用のコードはバグ修正用のブランチにコミットされています。そしてついにバグの原因を突き止めて、修正した！やった！",
+              "",
+              "あとは`bugFix`ブランチを`master`ブランチに統合できればOK。そこで単純に`master`をfast-forwardすればよいかというと、それでは`master`ブランチの中にデバッグ用のコードも混入してしまいます。"
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "ここでGitの魔法が力を発揮します。解決のためにはいくつかの方法がありますが、最も素直な解決方法は2つあって：",
+              "",
+              "* `git rebase -i`",
+              "* `git cherry-pick`",
+              "",
+              "インタラクティブモードの（`-i`オプションつきの）rebaseによって、保持したいコミットと破棄したいコミットを選り分けることができます。コミットの順序を変更することも可能です。この方法は、一部の変更をどこかへやってしまいたい時に便利です。",
+              "",
+              "もう一方のcherry-pickを使うと、持っていきたいコミットを選んで`HEAD`の先にストンと落とすことができます。"
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "後半の章ですのでどう解決するかをもう自分で考えることができると思います。このレベルをクリアするためには、`bugFix`が持っているコミットを`master`ブランチが受け取る必要がある点には注意してください。"
             ]
           }
         }
@@ -32672,9 +34885,9 @@ require.define("/src/levels/mixed/1.js",function(require,module,exports,__dirnam
 };
 
 });
-require("/src/levels/mixed/1.js");
+require("/src/levels/mixed/grabbingOneCommit.js");
 
-require.define("/src/levels/mixed/2.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/src/levels/mixed/jugglingCommits.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "disabledMap": {
     "git cherry-pick": true,
     "git revert": true
@@ -32696,10 +34909,12 @@ require.define("/src/levels/mixed/2.js",function(require,module,exports,__dirnam
   "name": {
     "ko": "커밋들 갖고 놀기",
     "en_US": "Juggling Commits",
+    "ja": "Juggling Commits",
     "zh_CN": "提交变换戏法"
   },
   "hint": {
     "en_US": "The first command is git rebase -i HEAD~2",
+    "ja": "最初に打つコマンドはgit rebase -i HEAD~2",
     "ko": "첫번째 명령은 git rebase -i HEAD~2 입니다",
     "zh_CN": "第一个命令是 'git rebase -i HEAD~2'"
   },
@@ -32740,6 +34955,45 @@ require.define("/src/levels/mixed/2.js",function(require,module,exports,__dirnam
               "Lastly, pay attention to the goal state here -- since we move the commits twice, they both get an apostrophe appended. One more apostrophe is added for the commit we amend, which gives us the final form of the tree ",
               "",
               "That being said, I can compare levels now based on structure and relative apostrophe differences. As long as your tree's `master` branch has the same structure and relative apostrophe differences, I'll give full credit"
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Commitsをやりくりする",
+              "",
+              "開発中に頻繁に起こるケースをもう1つ考えます。ある変更（`newImage`）とまた別の変更（`caption`）があって、それらに依存関係があるとします。この一連の変更が一列に積み重なっているとします。",
+              "",
+              "ここでトリッキーなのは、以前のコミットに対して微修正をかけなければならないケースがあるということです。今回の教材でも、過去のコミットであるにも関わらず`newImage`ブランチに僅かな修正を加えるような設計の修正が入ったとしましょう。"
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "この困難な状況を、以下の手順で克服することを考えます：",
+              "",
+              "* `git rebase -i`を使って順番を変更する。これで、変更をかけたいコミットを一番先頭に持ってくる。",
+              "* `commit --amend`コマンドで僅かな変更を行う",
+              "* `git rebase -i`コマンドを再度使って、先頭に持ってきていたコミットを元に戻す",
+              "* 最後に、レベルクリアのためにmasterブランチを先頭に持ってくる",
+              "",
+              "クリアのための方法はいくつもありますが（cherry-pickを使うこともできます）、別の回答はまた後程の章で見ることにんして、今回は上記の方法でやってみることにしましょう。"
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "最後に、ゴール時点での状態に気を付けてください。今回2回ほどコミットを動かしますから、コミットへのポインタにはアポストロフィ（'）が追加されます。commit --amendコマンドの実行でできたコミットには更にもう1つのアポストロフィが追加されます。 "
             ]
           }
         }
@@ -32827,9 +35081,9 @@ require.define("/src/levels/mixed/2.js",function(require,module,exports,__dirnam
 };
 
 });
-require("/src/levels/mixed/2.js");
+require("/src/levels/mixed/jugglingCommits.js");
 
-require.define("/src/levels/mixed/3.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/src/levels/mixed/jugglingCommits2.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "goalTreeString": "%7B%22branches%22%3A%7B%22master%22%3A%7B%22target%22%3A%22C3%27%22%2C%22id%22%3A%22master%22%7D%2C%22newImage%22%3A%7B%22target%22%3A%22C2%22%2C%22id%22%3A%22newImage%22%7D%2C%22caption%22%3A%7B%22target%22%3A%22C3%22%2C%22id%22%3A%22caption%22%7D%7D%2C%22commits%22%3A%7B%22C0%22%3A%7B%22parents%22%3A%5B%5D%2C%22id%22%3A%22C0%22%2C%22rootCommit%22%3Atrue%7D%2C%22C1%22%3A%7B%22parents%22%3A%5B%22C0%22%5D%2C%22id%22%3A%22C1%22%7D%2C%22C2%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C2%22%7D%2C%22C3%22%3A%7B%22parents%22%3A%5B%22C2%22%5D%2C%22id%22%3A%22C3%22%7D%2C%22C2%27%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C2%27%22%7D%2C%22C2%27%27%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C2%27%27%22%7D%2C%22C3%27%22%3A%7B%22parents%22%3A%5B%22C2%27%27%22%5D%2C%22id%22%3A%22C3%27%22%7D%7D%2C%22HEAD%22%3A%7B%22target%22%3A%22master%22%2C%22id%22%3A%22HEAD%22%7D%7D",
   "solutionCommand": "git checkout master;git cherry-pick C2;git commit --amend;git cherry-pick C3",
   "disabledMap": {
@@ -32850,10 +35104,12 @@ require.define("/src/levels/mixed/3.js",function(require,module,exports,__dirnam
   "name": {
     "ko": "커밋 갖고 놀기 #2",
     "en_US": "Juggling Commits #2",
+    "ja": "コミットをやりくりする その2",
     "zh_CN": "提交交换戏法 #2"
   },
   "hint": {
     "en_US": "Don't forget to forward master to the updated changes!",
+    "ja": "masterのポインタを先に進めることを忘れずに！",
     "ko": "master를 변경 완료한 커밋으로 이동(forward)시키는 것을 잊지 마세요!",
     "zh_CN": "别忘记了将 master 快进到最新的更新上！"
   },
@@ -32896,6 +35152,47 @@ require.define("/src/levels/mixed/3.js",function(require,module,exports,__dirnam
               "So in this level, let's accomplish the same objective of amending `C2` once but avoid using `rebase -i`. I'll leave it up to you to figure it out! :D",
               "",
               "Remember, the exact number of apostrophe's (') on the commit are not important, only the relative differences. For example, I will give credit to a tree that matches the goal tree but has one extra apostrophe everywhere"
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## コミットをやりくりする その2",
+              "",
+              "*注意 この一つ前のレベル「コミットをやりくりする」をクリアしていない人は、まずそちらの問題をクリアしてきてください*",
+              "",
+              "前回見てきたように、コミット順序の変更のために、私たちは`rebase -i`コマンドを利用しました。ツリーの先頭に変更対象のコミットがあれば、--amendオプションを使うことで容易に変更を書きかえて、元の順序に戻すことができます。",
+              "",
+              "この場合に心配なことが一つだけあって、それは複数回の順序の変更が行われるので、rebaseのコンフリクト（衝突）が起こりうることです。こういうケースへの対策として、`git cherry-pick`を使った別の解決法について考えてみましょう。"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "git cherry-pickを使うと、ツリーの中から複数のコミットを選んで、HEADの下に新しく作ることができましたね。",
+              "",
+              "簡単なデモを見てみましょう："
+            ],
+            "afterMarkdowns": [
+              "できました！次へ進みましょう"
+            ],
+            "command": "git cherry-pick C2",
+            "beforeCommand": "git checkout -b bugFix; git commit; git checkout master; git commit"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "このレベルでは、`C2`をamendすることで前回と同じ目的を達成しましょう。但し`rebase -i`は使わずにクリアしてください。どんな方法で進めるかはあなたにおまかせします！:D"
             ]
           }
         }
@@ -32986,17 +35283,19 @@ require.define("/src/levels/mixed/3.js",function(require,module,exports,__dirnam
   }
 };
 });
-require("/src/levels/mixed/3.js");
+require("/src/levels/mixed/jugglingCommits2.js");
 
-require.define("/src/levels/rampup/1.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/src/levels/rampup/detachedHead.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C2\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C4\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C3\"],\"id\":\"C4\"}},\"HEAD\":{\"target\":\"C4\",\"id\":\"HEAD\"}}",
   "solutionCommand": "git checkout C4",
   "startTree": "{\"branches\":{\"master\":{\"target\":\"C2\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C4\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C3\"],\"id\":\"C4\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
   "name": {
-    "en_US": "Detach yo' HEAD"
+    "en_US": "Detach yo' HEAD",
+    "zh_CN": "分离HEAD"
   },
   "hint": {
-    "en_US": "Use the label (hash) on the commit for help!"
+    "en_US": "Use the label (hash) on the commit for help!",
+    "zh_CN": "使用提交记录上的标签(hash)来求助！"
   },
   "startDialog": {
     "en_US": {
@@ -33024,11 +35323,11 @@ require.define("/src/levels/rampup/1.js",function(require,module,exports,__dirna
             "markdowns": [
               "## HEAD",
               "",
-              "First we have to talk about \"HEAD.\" HEAD is the symbolic name for the currently checked out commit -- it's essentially what commit you're working on top of.",
+              "First we have to talk about \"HEAD\". HEAD is the symbolic name for the currently checked out commit -- it's essentially what commit you're working on top of.",
               "",
-              "The working directory will always match the current state of HEAD, so by moving HEAD, you actually change the contents of your directory.",
+              "HEAD always points to the most recent commit which is reflected in the working tree. Most git commands which make changes to the working tree will start by changing HEAD.",
               "",
-              "Normally HEAD points to a branch name (like `bugFix`). When you commit, both bugFix and HEAD move together"
+              "Normally HEAD points to a branch name (like bugFix). When you commit, the status of bugFix is altered and this change is visible through HEAD."
             ]
           }
         },
@@ -33076,21 +35375,102 @@ require.define("/src/levels/rampup/1.js",function(require,module,exports,__dirna
           }
         }
       ]
+    },
+    "zh_CN": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## 在Git中前后移动",
+              "",
+              "在接触Git的更多高级主题之前，我们先学习用不同的方法在代表你的项目的提交记录树上前后移动。",
+              "",
+              "一旦能够熟练地在Git中前进后退，你使用其他git命令的威力也会被放大！",
+              "",
+              "",
+              "",
+              "",
+              ""
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## HEAD",
+              "",
+              "我们首先看一下\"HEAD\". HEAD是当前提交记录的符号名称 -- 其实就是你正在其基础进行工作的提交记录。",
+              "",
+              "HEAD总是指向最近一次提交记录，表现为当前工作树。大多数修改工作树的git命令都开始于改变HEAD指向。",
+              "",
+              "HEAD通常指向分支名（比如bugFix）。你提交时，改变了bugFix的状态，这一变化通过HEAD变得可见。"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "在实例中看一下。我们将会观察提交前后HEAD的位置。"
+            ],
+            "afterMarkdowns": [
+              "看! HEAD一直藏在`master`分支后面。"
+            ],
+            "command": "git checkout C1; git checkout master; git commit; git checkout C2",
+            "beforeCommand": ""
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "### 分离 HEAD",
+              "",
+              "分离HEAD就是让其指向一个提交记录而不是分支名。这是命令执行之前的样子： ",
+              "",
+              "HEAD -> master -> C1",
+              ""
+            ],
+            "afterMarkdowns": [
+              "现在变成了",
+              "",
+              "HEAD -> C1"
+            ],
+            "command": "git checkout C1",
+            "beforeCommand": ""
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "想完成此关，从`bugFix`分离出HEAD并让其指向一个提交记录。",
+              "",
+              "通过hash值指定提交记录。每个提交记录的hash值显示在代表提交记录的圆圈中。"
+            ]
+          }
+        }
+      ]
     }
   }
 };
-});
-require("/src/levels/rampup/1.js");
 
-require.define("/src/levels/rampup/2.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+});
+require("/src/levels/rampup/detachedHead.js");
+
+require.define("/src/levels/rampup/relativeRefs.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C2\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C4\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C3\"],\"id\":\"C4\"}},\"HEAD\":{\"target\":\"C3\",\"id\":\"HEAD\"}}",
   "solutionCommand": "git checkout bugFix^",
   "startTree": "{\"branches\":{\"master\":{\"target\":\"C2\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C4\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C3\"],\"id\":\"C4\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
   "name": {
-    "en_US": "Everything is Relative"
+    "en_US": "Relative Refs (^)",
+    "zh_CN": "相对引用(^)"
   },
   "hint": {
-    "en_US": "Remember the Caret (^) operator!"
+    "en_US": "Remember the Caret (^) operator!",
+    "zh_CN": "记住插入(^)操作符!"
   },
   "startDialog": {
     "en_US": {
@@ -33167,21 +35547,99 @@ require.define("/src/levels/rampup/2.js",function(require,module,exports,__dirna
           }
         }
       ]
+    },
+    "zh_CN": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## 相对引用",
+              "",
+              "用指定提交记录hash值的方式在Git中移动会变得比较乏味。在现实中，你不会有漂亮的可视化的提交记录树放在终端旁边，所以你不得不用`git log`来查看hasn值。",
+              "",
+              "另外，hash值在真实的Git环境中也会更长。举个例子，前一关的介绍中的提交记录的hash值是`fed2da64c0efc5293610bdd892f82a58e8cbc5d8`。不要把舌头闪了...",
+              "",
+              "好的一面是，Git对hash的处理很智能。你只需要提供能够唯一标识提交记录的前几个字符即可。所以，我可以仅输入`fed2`而不是上面的一长串字符。"
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "我说过，通过hash指定提交记录不是很方便，所以Git引入了相对引用。这个就很牛掰了!",
+              "",
+              "使用相对引用，你可以从一个易于记忆的地方（比如分支名`bugFix`或`HEAD`）开始工作。",
+              "",
+              "相对引用非常给力，这里我介绍两个简单的用法：",
+              "",
+              "* 使用`^`向上移动1个提交记录",
+              "* 使用`~<num>`向上移动多个提交记录"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "首先看看插入(^)操作符。把插入符跟在引用名后面，表示让Git寻找指定提交记录的父提交。",
+              "",
+              "所以`master^`相当于\"`master`的父提交\"。",
+              "",
+              "`master^^`是`master`的父父提交（上上代祖先）",
+              "",
+              "切换到master的父提交"
+            ],
+            "afterMarkdowns": [
+              "唰！搞定。这种方式比输入提交记录的hash值简单多了！"
+            ],
+            "command": "git checkout master^",
+            "beforeCommand": "git commit"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "你也可以`HEAD`把用作相对引用。以下命令使用`HEAD`在提交树中向上移动几次。"
+            ],
+            "afterMarkdowns": [
+              "简单！我们可以一直使用`HEAD^`向上移动。"
+            ],
+            "command": "git checkout C3; git checkout HEAD^; git checkout HEAD^; git checkout HEAD^",
+            "beforeCommand": "git commit; git commit"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "要完成此关，切换到`bugFix`的父提交。这会分离出`HEAD`.",
+              "",
+              "如果你愿意的话，使用hash值也可以过关，但为何不试试使用相对引用呢？"
+            ]
+          }
+        }
+      ]
     }
   }
 };
-});
-require("/src/levels/rampup/2.js");
 
-require.define("/src/levels/rampup/3.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+});
+require("/src/levels/rampup/relativeRefs.js");
+
+require.define("/src/levels/rampup/relativeRefs2.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "goalTreeString": "{\"branches\":{\"master\":{\"target\":\"C6\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C0\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C2\"],\"id\":\"C4\"},\"C5\":{\"parents\":[\"C3\"],\"id\":\"C5\"},\"C6\":{\"parents\":[\"C5\"],\"id\":\"C6\"}},\"HEAD\":{\"target\":\"C1\",\"id\":\"HEAD\"}}",
   "solutionCommand": "git branch -f master C6;git checkout HEAD~1;git branch -f bugFix HEAD~1",
   "startTree": "{\"branches\":{\"master\":{\"target\":\"C4\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C5\",\"id\":\"bugFix\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C2\"],\"id\":\"C4\"},\"C5\":{\"parents\":[\"C3\"],\"id\":\"C5\"},\"C6\":{\"parents\":[\"C5\"],\"id\":\"C6\"}},\"HEAD\":{\"target\":\"C2\",\"id\":\"HEAD\"}}",
   "hint": {
-    "en_US": "You'll need to use at least one direct reference (hash) to complete this level"
+    "en_US": "You'll need to use at least one direct reference (hash) to complete this level",
+    "zh_CN": "这一关至少要用到一次直接引用(hash)"
   },
   "name": {
-    "en_US": "Flex your force with -f"
+    "en_US": "Relative Refs #2 (~)",
+    "zh_CN": "相对引用2(~)"
   },
   "startDialog": {
     "en_US": {
@@ -33237,27 +35695,85 @@ require.define("/src/levels/rampup/3.js",function(require,module,exports,__dirna
           }
         }
       ]
+    },
+    "zh_CN": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "### The \"~\" operator",
+              "",
+              "假设需要在提交树中向上移动很多步。使用多个`^`非常无聊，所以Git也引入了波浪(~)操作符。",
+              "",
+              "",
+              "波浪操作符后面可以（可选地）跟一个数字，指定向上移动多少次。看个例子"
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "使用`~`一次后退多步."
+            ],
+            "afterMarkdowns": [
+              "唰！如此简洁--相对引用就是好啊！"
+            ],
+            "command": "git checkout HEAD~4",
+            "beforeCommand": "git commit; git commit; git commit"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "### Branch forcing",
+              "",
+              "你现在是相对引用的高手了，现在*用*他来实际做点事情。",
+              "",
+              "我使用相对引用最多的就是移动分支。你可以使用`-f`选项把直接让分支指向另一个提交亡灵。举个例子:",
+              "",
+              "`git branch -f master HEAD~3`",
+              "",
+              "（强制）移动master指向HEAD的第3级父提交。"
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "要完成此关，移动`HEAD`，`master`和`bugFix`到目标所示的位置。"
+            ]
+          }
+        }
+      ]
     }
   }
 };
-});
-require("/src/levels/rampup/3.js");
 
-require.define("/src/levels/rampup/4.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+});
+require("/src/levels/rampup/relativeRefs2.js");
+
+require.define("/src/levels/rampup/reversingChanges.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "goalTreeString": "%7B%22branches%22%3A%7B%22master%22%3A%7B%22target%22%3A%22C1%22%2C%22id%22%3A%22master%22%7D%2C%22pushed%22%3A%7B%22target%22%3A%22C2%27%22%2C%22id%22%3A%22pushed%22%7D%2C%22local%22%3A%7B%22target%22%3A%22C1%22%2C%22id%22%3A%22local%22%7D%7D%2C%22commits%22%3A%7B%22C0%22%3A%7B%22parents%22%3A%5B%5D%2C%22id%22%3A%22C0%22%2C%22rootCommit%22%3Atrue%7D%2C%22C1%22%3A%7B%22parents%22%3A%5B%22C0%22%5D%2C%22id%22%3A%22C1%22%7D%2C%22C2%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C2%22%7D%2C%22C3%22%3A%7B%22parents%22%3A%5B%22C1%22%5D%2C%22id%22%3A%22C3%22%7D%2C%22C2%27%22%3A%7B%22parents%22%3A%5B%22C2%22%5D%2C%22id%22%3A%22C2%27%22%7D%7D%2C%22HEAD%22%3A%7B%22target%22%3A%22pushed%22%2C%22id%22%3A%22HEAD%22%7D%7D",
   "solutionCommand": "git reset HEAD~1;git checkout pushed;git revert HEAD",
+  "compareOnlyBranches": true,
   "startTree": "{\"branches\":{\"master\":{\"target\":\"C1\",\"id\":\"master\"},\"pushed\":{\"target\":\"C2\",\"id\":\"pushed\"},\"local\":{\"target\":\"C3\",\"id\":\"local\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"}},\"HEAD\":{\"target\":\"local\",\"id\":\"HEAD\"}}",
   "name": {
     "en_US": "Reversing Changes in Git",
+    "ja": "変更を元に戻す",
     "fr_FR": "Annuler des changements avec Git",
     "ko": "Git에서 작업 되돌리기",
-    "zh_CN": "Git 里的撤销改变"
+    "zh_CN": "在Git中撤销更改"
   },
   "hint": {
     "en_US": "Notice that revert and reset take different arguments.",
     "fr_FR": "",
-    "zh_CN": "",
-    "ko": ""
+    "zh_CN": "注意revert和reset使用不同的参数。",
+    "ko": "",
+    "ja": ""
   },
   "startDialog": {
     "en_US": {
@@ -33318,6 +35834,69 @@ require.define("/src/levels/rampup/4.js",function(require,module,exports,__dirna
               "To complete this level, reverse the two most recent commits on both `local` and `pushed`.",
               "",
               "Keep in mind that `pushed` is a remote branch and `local` is a local branch -- that should help you choose your methods."
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## 変更を元に戻す",
+              "",
+              "Gitでは変更を元に戻す方法がたくさんあります。コミットと同じように、低レベルな動作（ファイル別だったりファイルの中の一部だったり）も高レベルな動作（変更のまとまりのキャンセル）もできます。このアプリケーションでは後者の方法について紹介します。",
+              "",
+              "基本的なアンドゥの方法が2つあります - 一つは`git reset`を使う方法で、もう1つは`git revert`を使う方法です。次のダイアログで一つ一つを見ていきます。",
+              ""
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "## Git Reset",
+              "",
+              "`git reset`はブランチのポインタを後方に移動することで変更のキャンセルを実現します。履歴を上書きするような動作だと思うと良いでしょうか：`git reset`はそもそも前のコミットなんかなかったかのように、ブランチのポインタを元に戻してくれます。",
+              "",
+              "どういう感じか見てみましょう。"
+            ],
+            "afterMarkdowns": [
+              "いいですね！Gitは単純にmasterブランチへのポインタを`C1`へ戻しました。これでこのローカルリポジトリにはまるで`C2`なんて無かったかのように変更をキャンセルできました。"
+            ],
+            "command": "git reset HEAD~1",
+            "beforeCommand": "git commit"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "## Git Revert",
+              "",
+              "自分のマシン上のブランチではさっきの`git reset`でうまくいきましたが、この「履歴を上書きする」手段は、他の人も使っているリモートにあるリポジトリに対しては使うことができません。",
+              "",
+              "変更を巻き戻して他の人とそれを共有するためには、`git revert`を使う必要があります。今度はこれを見てみましょう。"
+            ],
+            "afterMarkdowns": [
+              "あれ、おかしいな。巻き戻したいと思ってたコミットの下に新しいコミットが出来上がってしまったみたいです。なぜか。これは、この新しい`C2'`コミットは`C2`へ戻すのに必要な内容を確かに変更して巻き戻していたのです。",
+              "",
+              "こんな風にして、巻き戻した内容を他人と共有するためにはrevertを使います。"
+            ],
+            "command": "git revert HEAD",
+            "beforeCommand": "git commit"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "この章の仕上げに、`local`と`pushed`の両方の直近のコミットを巻き戻してみましょう。",
+              "",
+              "`pushed`はリモートのブランチで、`local`はローカルであることに注意。正しくコマンドを使い分けましょう。"
             ]
           }
         }
@@ -33394,9 +35973,9 @@ require.define("/src/levels/rampup/4.js",function(require,module,exports,__dirna
             "markdowns": [
               "## 撤销 Git 里面的变动",
               "",
-              "在 Git 里有很多方法撤销（reverse）变动。和 commit 一样，在 Git 里撤销变动同时具有底层次的部分（暂存一些独立的文件或者片段）和高层次的部分（具体到变动是究竟怎么被撤销的）。我们这个应用主要关注后者。",
+              "在 Git 里撤销修改的方法很多。和 commit 一样，在 Git 里撤销变动同时具有底层部分（暂存一些独立的文件或者片段）和高层部分（具体到变动是究竟怎么被撤销的）。我们这个应用主要关注后者。",
               "",
-              "在 Git 里主要有两种方法来撤销变动 —— 一种是 `git reset`，另外一种是 `git revert`。让我们在下一个窗口逐一了解它们。",
+              "在 Git 里主要用两种方法来撤销变动 —— 一种是 `git reset`，另外一种是 `git revert`。让我们在下一个窗口逐一了解它们。",
               ""
             ]
           }
@@ -33407,13 +35986,13 @@ require.define("/src/levels/rampup/4.js",function(require,module,exports,__dirna
             "beforeMarkdowns": [
               "## Git Reset",
               "",
-              "`git reset` 通过把分支记录回退上一个提交来实现撤销改动。这意味着你可以把它的行为当作是\"重写历史\"。`git reset` 会令分支记录回退，做到最新的提交好像没有提交过一样。",
+              "`git reset`把分支记录回退到上一个提交记录来实现撤销改动。你可以认为这是在\"重写历史\"。`git reset`往回移动分支，原来指向的提交记录好像重来没有提交过一样。",
               "",
               "让我们看看具体的操作："
             ],
             "command": "git reset HEAD~1",
             "afterMarkdowns": [
-              "Nice! Git 就简单地把 master 分支的记录移回 `C1`；现在我们的本地仓库就处于好像提交 `C2` 没有发生过的状态了。"
+              "Nice!Git把master分支的指向简单地移回到`C1`；现在我们的本地代码库处于没有提交过`C2`的状态了。"
             ],
             "beforeCommand": "git commit"
           }
@@ -33424,15 +36003,15 @@ require.define("/src/levels/rampup/4.js",function(require,module,exports,__dirna
             "beforeMarkdowns": [
               "## Git Revert",
               "",
-              "虽然在你机子的本地环境中这样来撤销变更看起来很方便，但是这种“改写历史”的方法对别人用的远端分支是无效的哦！",
+              "虽然在你的本地分支中使用`git reset`很方便，但是这种“改写历史”的方法对别人的远端分支是无效的哦！",
               "",
-              "为了撤销分支并把这些变动*分享*给别人，我们需要 `git revert`。下面继续看它是怎么运作的。"
+              "为了撤销更改并*传播*给别人，我们需要使用`git revert`。举个例子"
             ],
             "command": "git revert HEAD",
             "afterMarkdowns": [
-              "怪哉！在我们要撤销的提交之后居然多了一个新提交！这是因为这个新提交 `C2'` 提供了*变动*（introduces changes） —— 刚好是用来撤销 `C2` 这个提交的。",
+              "怪哉！在我们要撤销的提交记录后面居然多了一个新提交！这是因为新提交记录`C2'`引入了*更改*——刚好是用来撤销 `C2` 这个提交的。",
               "",
-              "借助 revert，现在你可以把你的改动分享给别人啦。"
+              "借助 revert，现在可以把你的更改传递给别人啦。"
             ],
             "beforeCommand": "git commit"
           }
@@ -33441,9 +36020,9 @@ require.define("/src/levels/rampup/4.js",function(require,module,exports,__dirna
           "type": "ModalAlert",
           "options": {
             "markdowns": [
-              "要刷过这关，请分别把 `local` 分支和 `pushed` 分支上最近的一个提交撤销掉。",
+              "要完成此关，分别撤销`local`分支和`pushed`分支上的最近一次提交。",
               "",
-              "记住 `pushes` 是一个远程分支，`local` 是一个本地分支 —— 有了这么明显的提示应该知道用哪种方法了吧？"
+              "记住 `pushed` 是一个远程分支，`local` 是一个本地分支 —— 有了这么明显的提示应该知道用哪种方法了吧？"
             ]
           }
         }
@@ -33516,9 +36095,9 @@ require.define("/src/levels/rampup/4.js",function(require,module,exports,__dirna
 };
 
 });
-require("/src/levels/rampup/4.js");
+require("/src/levels/rampup/reversingChanges.js");
 
-require.define("/src/levels/rebase/1.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+require.define("/src/levels/rebase/manyRebases.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "compareOnlyMasterHashAgnostic": true,
   "disabledMap": {
     "git revert": true
@@ -33527,14 +36106,16 @@ require.define("/src/levels/rebase/1.js",function(require,module,exports,__dirna
   "solutionCommand": "git checkout bugFix;git rebase master;git checkout side;git rebase bugFix;git checkout another;git rebase side;git rebase another master",
   "startTree": "{\"branches\":{\"master\":{\"target\":\"C2\",\"id\":\"master\"},\"bugFix\":{\"target\":\"C3\",\"id\":\"bugFix\"},\"side\":{\"target\":\"C6\",\"id\":\"side\"},\"another\":{\"target\":\"C7\",\"id\":\"another\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"},\"C4\":{\"parents\":[\"C0\"],\"id\":\"C4\"},\"C5\":{\"parents\":[\"C4\"],\"id\":\"C5\"},\"C6\":{\"parents\":[\"C5\"],\"id\":\"C6\"},\"C7\":{\"parents\":[\"C5\"],\"id\":\"C7\"}},\"HEAD\":{\"target\":\"master\",\"id\":\"HEAD\"}}",
   "name": {
-    "ko": "9천번이 넘는 리베이스",
     "en_US": "Rebasing over 9000 times",
-    "zh_CN": "衍合一百遍啊一百遍"
+    "ko": "9천번이 넘는 리베이스",
+    "ja": "Rebasing over 9000 times",
+    "zh_CN": "N次Rebase"
   },
   "hint": {
     "en_US": "Remember, the most efficient way might be to only update master at the end...",
+    "ja": "最も効率的なやり方はmasterを最後に更新するだけかもしれない・・・",
     "ko": "아마도 master를 마지막에 업데이트하는 것이 가장 효율적인 방법일 것입니다...",
-    "zh_CN": "记住，可能最终最高效的方法就是更新主分支（master）……"
+    "zh_CN": "记住，最后更新master分支可能是最高效的方法。"
   },
   "startDialog": {
     "en_US": {
@@ -33555,6 +36136,24 @@ require.define("/src/levels/rebase/1.js",function(require,module,exports,__dirna
         }
       ]
     },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "### 複数のブランチをリベースする",
+              "",
+              "さあ、いくつものブランチが出てきます。このブランチたち全てをmasterブランチにリベースしましょう。",
+              "",
+              "おエライさん方が今回の仕事を少しトリッキーにしてくれました ― コミットはすべて一列のシーケンシャルな状態にしてほしいそうです。つまり私たちが作るリポジトリの最終的なツリーの状態は、`C7'`が最後に来て、`C6'`がその一つ上に来て、、と順に積み重なるイメージです。",
+              "",
+              "試行錯誤してツリーが汚くなってきたら、`reset`コマンドを使ってツリーの状態を初期化してください。模範解答をチェックして、それよりも簡単なコマンドで済ませられるかどうか、を考えるのも忘れずに！"
+            ]
+          }
+        }
+      ]
+    },
     "zh_CN": {
       "childViews": [
         {
@@ -33563,11 +36162,11 @@ require.define("/src/levels/rebase/1.js",function(require,module,exports,__dirna
             "markdowns": [
               "### 多分支衍合",
               "",
-              "呐，现在我们有很多分支啦！让我们把这些分支的工作衍合到 master 分支上吧。",
+              "呐，现在我们有很多分支啦！让我们rebase这些分支的工作到 master 分支上吧。",
               "",
-              "但是上头（upper management）找了点麻烦 —— 他们要希望提交历史是有序的，也就是我们最终的结果是 `C7'` 在最底部，`C6'` 在它上面，以此类推。",
+              "但是你的头头找了点麻烦 —— 他们希望得到有序的提交历史，也就是我们最终的结果是 `C7'` 在最底部，`C6'` 在它上面，以此类推。",
               "",
-              "假如你搞砸了，没所谓的（虽然我不会告诉你用 `reset` 可以重新开始）。记得最后要看看我们的答案，并和你的对比下，看谁敲的命令更少哦！"
+              "假如你搞砸了，没所谓的（虽然我不会告诉你用 `reset` 可以重新开始）。记得看看我们提供的答案，看你能否使用更少的命令完成任务！"
             ]
           }
         }
@@ -33593,10 +36192,11 @@ require.define("/src/levels/rebase/1.js",function(require,module,exports,__dirna
     }
   }
 };
-});
-require("/src/levels/rebase/1.js");
 
-require.define("/src/levels/rebase/2.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
+});
+require("/src/levels/rebase/manyRebases.js");
+
+require.define("/src/levels/rebase/selectiveRebase.js",function(require,module,exports,__dirname,__filename,process,global){exports.level = {
   "compareAllBranchesHashAgnostic": true,
   "disabledMap": {
     "git revert": true
@@ -33607,10 +36207,12 @@ require.define("/src/levels/rebase/2.js",function(require,module,exports,__dirna
   "name": {
     "ko": "브랜치 스파게티",
     "en_US": "Branch Spaghetti",
+    "ja": "ブランチスパゲッティ",
     "zh_CN": "分支浆糊"
   },
   "hint": {
     "en_US": "Make sure to do everything in the proper order! Branch one first, then two, then three",
+    "ja": "全て正しい順番で処理すること！oneが最初で、次がtwo、最後にthreeを片付ける。",
     "ko": "이 문제를 해결하는 방법은 여러가지가 있습니다! 체리픽(cherry-pick)이 가장 쉽지만 오래걸리는 방법이고, 리베이스(rebase -i)가 빠른 방법입니다",
     "zh_CN": "确保你是按照正确的顺序来操作！先操作分支 `one`, 然后 `two`, 最后才是 `three`"
   },
@@ -33630,6 +36232,26 @@ require.define("/src/levels/rebase/2.js",function(require,module,exports,__dirna
               "Branch `one` needs a re-ordering and a deletion of `C5`. `two` needs pure reordering, and `three` only needs one commit!",
               "",
               "We will let you figure out how to solve this one -- make sure to check out our solution afterwards with `show solution`. "
+            ]
+          }
+        }
+      ]
+    },
+    "ja": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## ブランチスパゲッティ",
+              "",
+              "なんということでしょう。今回のレベルクリアのために、やることがたくさんあります。",
+              "",
+              "いま`master`が指しているコミットの数個前のコミットに、ブランチ`one`、`two`それから`three`があります。何か事情があって、これらの3つのブランチをmasterが指している最新の状態に更新したいケースを考えます。",
+              "",
+              "ブランチ`one`に対しては、順序の変更と`C5`の削除が必要です。`two`では順序の変更のみ、`three`に対しては1回だけコミットすればOKです。",
+              "",
+              "`show solution`コマンドで模範解答を確認できますから、こちらも利用してください。 "
             ]
           }
         }
@@ -33679,6 +36301,6 @@ require.define("/src/levels/rebase/2.js",function(require,module,exports,__dirna
 };
 
 });
-require("/src/levels/rebase/2.js");
+require("/src/levels/rebase/selectiveRebase.js");
 
 })();

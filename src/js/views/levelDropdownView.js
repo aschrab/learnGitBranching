@@ -5,6 +5,7 @@ var Backbone = (!require('../util').isBrowser()) ? require('backbone') : window.
 
 var util = require('../util');
 var intl = require('../intl');
+var log = require('../log');
 var KeyboardListener = require('../util/keyboard').KeyboardListener;
 var Main = require('../app');
 
@@ -230,6 +231,9 @@ var LevelDropdownView = ContainedBase.extend({
         'commandSubmitted',
         'level ' + id
       );
+      var level = Main.getLevelArbiter().getLevel(id);
+      var name = level.name.en_US;
+      log.levelSelected(name);
     }
     this.hide();
   },
@@ -257,7 +261,9 @@ var SeriesView = BaseView.extend({
   className: 'seriesView box flex1 vertical',
   template: _.template($('#series-view').html()),
   events: {
-    'click div.levelIcon': 'click'
+    'click div.levelIcon': 'click',
+    'mouseenter div.levelIcon': 'enterIcon',
+    'mouseleave div.levelIcon': 'leaveIcon'
   },
 
   initialize: function(options) {
@@ -272,9 +278,11 @@ var SeriesView = BaseView.extend({
     }, this);
 
     this.destination = options.destination;
+    // use a non-breaking space to prevent the level from bouncing around
+    // from missing strings
     this.JSON = {
       displayName: intl.getIntlKey(this.info, 'displayName'),
-      about: intl.getIntlKey(this.info, 'about'),
+      about: intl.getIntlKey(this.info, 'about') || "&nbsp;",
       ids: this.levelIDs
     };
 
@@ -291,13 +299,32 @@ var SeriesView = BaseView.extend({
     });
   },
 
-  click: function(ev) {
-    var element = ev.srcElement || ev.currentTarget;
-    if (!element) {
-      console.warn('wut, no id'); return;
-    }
+  getEventID: function(ev) {
+    var element = ev.target;
+    return $(element).attr('data-id');
+  },
 
-    var id = $(element).attr('data-id');
+  resetAbout: function() {
+    this.$('p.about').text(intl.getIntlKey(this.info, 'about'))
+      .css('font-style', 'inherit');
+  },
+
+  setAbout: function(content) {
+    this.$('p.about').text(content).css('font-style', 'italic');
+  },
+
+  enterIcon: function(ev) {
+    var id = this.getEventID(ev);
+    var level = Main.getLevelArbiter().getLevel(id);
+    this.setAbout(intl.getName(level));
+  },
+
+  leaveIcon: function() {
+    this.resetAbout();
+  },
+
+  click: function(ev) {
+    var id = this.getEventID(ev);
     this.navEvents.trigger('clickedID', id);
   }
 });

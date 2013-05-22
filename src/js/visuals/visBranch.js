@@ -77,17 +77,31 @@ var VisBranch = VisBase.extend({
     var commit = this.gitEngine.getCommitFromRef(this.get('branch'));
     var visNode = commit.get('visNode');
 
-    var threshold = this.get('gitVisuals').getFlipPos();
-    // somewhat tricky flip management here
-    var flip;
-    if (visNode.get('pos').x > threshold) {
-      flip = (this.get('isHead')) ? 1 : -1;
-      this.set('flip', flip);
-    } else {
-      flip = (this.get('isHead')) ? -1 : 1;
-      this.set('flip', flip);
-    }
+    this.set('flip', this.getFlipBool(commit, visNode));
     return visNode.getScreenCoords();
+  },
+
+  getFlipBool: function(commit, visNode) {
+    var threshold = this.get('gitVisuals').getFlipPos();
+    var overThreshold = (visNode.get('pos').x > threshold);
+
+    // easy logic first
+    if (!this.get('isHead')) {
+      if (this.getIsRemote()) {
+        return (overThreshold) ? 1 : -1;
+      } else {
+        return (overThreshold) ? -1 : 1;
+      }
+    }
+
+    // now for HEAD....
+    if (overThreshold) {
+      // if by ourselves, then feel free to squeeze in. but
+      // if other branches are here, then we need to show separate
+      return (this.isBranchStackEmpty()) ? -1 : 1;
+    } else {
+      return (this.isBranchStackEmpty()) ? 1 : -1;
+    }
   },
 
   getBranchStackIndex: function() {
@@ -115,8 +129,25 @@ var VisBranch = VisBase.extend({
     return this.getBranchStackArray().length;
   },
 
+  isBranchStackEmpty: function() {
+    // useful function for head when computing flip logic
+    var arr = this.gitVisuals.branchStackMap[this.getCommitID()];
+    return (arr) ?
+      arr.length === 0 :
+      true;
+  },
+
+  getCommitID: function() {
+    var target = this.get('branch').get('target');
+    if (target.get('type') === 'branch') {
+      // for HEAD
+      target = target.get('target');
+    }
+    return target.get('id');
+  },
+
   getBranchStackArray: function() {
-    var arr = this.gitVisuals.branchStackMap[this.get('branch').get('target').get('id')];
+    var arr = this.gitVisuals.branchStackMap[this.getCommitID()];
     if (arr === undefined) {
       // this only occurs when we are generating graphics inside of
       // a new Branch instantiation, so we need to force the update
@@ -258,12 +289,16 @@ var VisBranch = VisBase.extend({
     };
   },
 
-  getName: function() {
-    var name = this.get('branch').get('id');
-    var selected = this.gitEngine.HEAD.get('target').get('id');
+  getIsRemote: function() {
+    return this.get('branch').getIsRemote();
+  },
 
-    var add = (selected == name) ? '*' : '';
-    return name + add;
+  getName: function() {
+    var name = this.get('branch').getName();
+    var selected = this.get('branch') === this.gitEngine.HEAD.get('target');
+
+    var after = (selected) ? '*' : '';
+    return name + after;
   },
 
   nonTextToFront: function() {
@@ -380,6 +415,7 @@ var VisBranch = VisBase.extend({
     var rectSize = this.getRectSize();
 
     var arrowPath = this.getArrowPath();
+    var dashArray = (this.getIsRemote()) ? '--' : '';
 
     return {
       text: {
@@ -395,6 +431,7 @@ var VisBranch = VisBase.extend({
         opacity: nonTextOpacity,
         fill: this.getFill(),
         stroke: this.get('stroke'),
+        'stroke-dasharray': dashArray,
         'stroke-width': this.get('stroke-width')
       },
       arrow: {
